@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { loadHabits, saveHabits } from "@/storage/habitStorage";
+import { useEffect, useState } from "react";
+import { Alert } from "react-native";
+
 import {
   Pressable,
   StyleSheet,
@@ -15,26 +18,20 @@ type Habit = {
   title: string;
 };
 
-const INITIAL_HABITS: Habit[] = [
-  { id: "1", title: "Drink 2.5 L of water 💧" },
-  { id: "2", title: "Exercise 30 minutes 🏋️" },
-  { id: "3", title: "Plan today's tasks 📋" },
-  { id: "4", title: "Eat healthy, real foods 🥗" },
-  { id: "5", title: "Study ≥ 6 hours 💻" },
-  { id: "6", title: "No caffeine ☕" },
-  { id: "7", title: "No scrolling 📱" },
-  { id: "8", title: "No sugar 🍰" },
-  { id: "9", title: "Social media ≤ 120 min 📱" },
-  { id: "10", title: "Email 5:00 PM 📧" },
-  { id: "11", title: "Journal & self-reflect ✒️" },
-  { id: "12", title: "Read 30 minutes 📖" },
-  { id: "13", title: "Sleep ≥ 8 hours 💤" },
-];
 
 export default function HabitListCard() {
-  const [habits, setHabits] = useState(INITIAL_HABITS);
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [newHabit, setNewHabit] = useState("");
+
+  useEffect(() => {
+    loadHabits().then(setHabits);
+  }, []);
+
+  useEffect(() => {
+    saveHabits(habits);
+  }, [habits]);
+
 
   function addHabit() {
     if (!newHabit.trim()) return;
@@ -48,21 +45,48 @@ export default function HabitListCard() {
     setShowAdd(false);
   }
 
+
+  function deleteHabit(id: string) {
+    Alert.alert(
+      "Delete Habit",
+      "This habit will be removed from all future tracking. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () =>
+            setHabits((prev) => prev.filter((h) => h.id !== id)),
+        },
+      ]
+    );
+  }
+
+
   const renderItem = ({ item, drag, isActive }: RenderItemParams<Habit>) => {
     return (
-      <Pressable
-        onLongPress={drag}
-        disabled={isActive}
+      <View
         style={[
           styles.habitRow,
           isActive && { opacity: 0.6 },
         ]}
       >
-        <Text style={styles.bullet}>•</Text>
+        {/* Drag Handle */}
+        <Pressable onLongPress={drag} style={styles.dragHandle}>
+          <Text style={styles.dragIcon}>≡</Text>
+        </Pressable>
+
         <Text style={styles.habitText}>{item.title}</Text>
-      </Pressable>
+
+        {/* Delete */}
+        <Pressable onPress={() => deleteHabit(item.id)}>
+          <Text style={styles.delete}>🗑</Text>
+        </Pressable>
+      </View>
     );
   };
+
+
 
   return (
     <View>
@@ -81,8 +105,10 @@ export default function HabitListCard() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           onDragEnd={({ data }) => setHabits(data)}
-          scrollEnabled={false} // ❌ NO SCROLL INSIDE
+          scrollEnabled={false}
+          activationDistance={10} // 🔥 REQUIRED
         />
+
 
         {/* Add habit (hidden by default) */}
         {showAdd ? (
@@ -142,10 +168,15 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 10,
   },
-  bullet: {
+  dragHandle: {
+    paddingHorizontal: 6,
+    paddingTop: 4,
+  },
+
+  dragIcon: {
     color: "#FFF",
-    fontSize: 22,
-    marginRight: 10,
+    fontSize: 18,
+    marginRight: 8,
   },
   habitText: {
     color: "#FFF",
@@ -171,5 +202,10 @@ const styles = StyleSheet.create({
   addBtn: {
     color: "#A8E6CF",
     fontWeight: "600",
+  },
+  delete: {
+    color: "#FFF",
+    fontSize: 22,
+    marginLeft: 10,
   },
 });

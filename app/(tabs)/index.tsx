@@ -4,55 +4,62 @@ import HabitListCard from "@/components/HabitListCard";
 import MonthlyOverview from "@/components/MonthlyOverview";
 import WinsAndPenalties from "@/components/WinsAndPenalties";
 import YearlyOverview from "@/components/YearlyOverview";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+const { width } = useWindowDimensions();
+const isMobile = width < 768;
 
 export default function HomeScreen() {
   return (
-    <ScrollView style={styles.container}>
+    <GestureHandlerRootView style={styles.container}>
+      <ScrollView style={styles.container}>
 
-      {/* 1️⃣ Activity Heatmap */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Activity</Text>
-        <GithubStyleHeatmap />
-      </View>
-
-
-      {/* 2️⃣ Habit List + 11-Day Table */}
-      <View style={styles.middleSection}>
-
-        {/* Left: Habit List */}
-        <View style={styles.leftPanel}>
-          <HabitListCard />
+        {/* 1️⃣ Activity Heatmap */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Activity</Text>
+          <GithubStyleHeatmap />
         </View>
 
-        {/* Right: 11-Day Table */}
-        <View style={styles.rightPanel}>
-          <Text style={styles.sectionTitle}>Daily Tracker</Text>
-          <DailyTracker />
+
+        {/* 2️⃣ Habit List + 11-Day Table */}
+        <View
+          style={[
+            styles.middleSection,
+            isMobile ? styles.stackLayout : styles.splitLayout,
+          ]}
+        >
+          <View style={isMobile ? styles.fullWidth : styles.leftPanel}>
+            <HabitListCard />
+          </View>
+
+          <View style={isMobile ? styles.fullWidth : styles.rightPanel}>
+            <Text style={styles.sectionTitle}>Daily Tracker</Text>
+            <DailyTracker />
+          </View>
         </View>
 
-      </View>
 
-      {/* 3️⃣ Monthly Table */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Monthly Overview</Text>
-        <MonthlyOverview />
-      </View>
+        {/* 3️⃣ Monthly Table */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Monthly Overview</Text>
+          <MonthlyOverview />
+        </View>
 
-      {/* 4️⃣ Yearly Overview */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Yearly Overview</Text>
-        <YearlyOverview />
-      </View>
+        {/* 4️⃣ Yearly Overview */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Yearly Overview</Text>
+          <YearlyOverview />
+        </View>
 
-      {/* 5️⃣ Rewards & Punishments */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Wins & Penalties</Text>
-        <WinsAndPenalties />
-      </View>
+        {/* 5️⃣ Rewards & Punishments */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Wins & Penalties</Text>
+          <WinsAndPenalties />
+        </View>
 
-    </ScrollView>
+      </ScrollView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -73,17 +80,28 @@ const styles = StyleSheet.create({
   },
 
   middleSection: {
-    flexDirection: "row",
     marginHorizontal: 12,
-    gap: 8,
+    gap: 12,
   },
+  splitLayout: {
+    flexDirection: "row",
+  },
+  
+  stackLayout: {
+    flexDirection: "column",
+  },
+  
 
   leftPanel: {
     width: "35%",
   },
-
+  
   rightPanel: {
     width: "65%",
+  },
+  
+  fullWidth: {
+    width: "100%",
   },
 
   boxPlaceholder: {
