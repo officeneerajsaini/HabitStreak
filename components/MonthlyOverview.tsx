@@ -1,4 +1,4 @@
-import { useHabits } from "@/context/HabitContext";
+import { useTracker } from "@/context/TrackerContext";
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,28 +32,31 @@ export default function MonthlyOverview() {
   const isMobile = width < 500;
   const isSmallMobile = width < 380;
 
-  // Dynamic cell widths based on screen size
-  const CELL_WIDTH = isSmallMobile ? 42 : isMobile ? 48 : 60;
+  const CELL_WIDTH = isSmallMobile ? 40 : isMobile ? 45 : 50;
   const DATE_CELL_WIDTH = isSmallMobile ? 55 : isMobile ? 60 : 70;
   const PERCENT_CELL_WIDTH = isSmallMobile ? 36 : isMobile ? 40 : 50;
   const EMOJI_CELL_WIDTH = isSmallMobile ? 32 : isMobile ? 36 : 45;
   const NOTES_CELL_WIDTH = isSmallMobile ? 70 : isMobile ? 80 : 100;
 
   const {
-    habits,
-    monthlyData,
-    toggleHabitCompletion,
+    trackedHabits,
+    trackerData,
+    toggleCompletion,
     updateNote,
     getProgress,
     getDayEntry,
     isLoading,
-  } = useHabits();
+  } = useTracker();
 
   const today = startOfDay(new Date());
   const yesterday = subDays(today, 1);
 
-  /* ===== MONTH NAVIGATION ===== */
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Tooltip
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const [tooltipText, setTooltipText] = useState("");
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
   const monthDays = useMemo(() => {
     const start = startOfMonth(currentMonth);
@@ -60,11 +64,9 @@ export default function MonthlyOverview() {
     return eachDayOfInterval({ start, end });
   }, [currentMonth]);
 
-  /* ===== CELEBRATION ===== */
   const celebrationAnim = useRef(new Animated.Value(0)).current;
   const [celebratingDay, setCelebratingDay] = useState<string | null>(null);
 
-  /* ===== NAVIGATION ===== */
   function goToPrevMonth() {
     setCurrentMonth((prev) => {
       const newDate = new Date(prev);
@@ -88,8 +90,6 @@ export default function MonthlyOverview() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }
 
-  /* ===== HELPERS ===== */
-
   function getDayEmoji(progress: number) {
     if (progress < 50) return "🤨";
     if (progress < 70) return "😊";
@@ -102,11 +102,20 @@ export default function MonthlyOverview() {
   }
 
   function handleToggle(dateKey: string, habitId: string) {
-    toggleHabitCompletion(dateKey, habitId);
+    toggleCompletion(dateKey, habitId);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
-  /* ===== CELEBRATION TRIGGER ===== */
+  function showTooltip(text: string, event: any) {
+    const { pageX, pageY } = event.nativeEvent;
+    setTooltipText(text);
+    setTooltipPosition({ x: pageX, y: pageY - 50 });
+    setTooltipVisible(true);
+  }
+
+  function hideTooltip() {
+    setTooltipVisible(false);
+  }
 
   useEffect(() => {
     monthDays.forEach((day) => {
@@ -127,9 +136,7 @@ export default function MonthlyOverview() {
         });
       }
     });
-  }, [monthlyData, habits]);
-
-  /* ===== STATS ===== */
+  }, [trackerData, trackedHabits]);
 
   const monthStats = useMemo(() => {
     let totalDays = 0;
@@ -150,27 +157,26 @@ export default function MonthlyOverview() {
       completedDays,
       averageProgress: totalDays > 0 ? Math.round(totalProgress / totalDays) : 0,
     };
-  }, [monthDays, monthlyData, habits, today]);
+  }, [monthDays, trackerData, trackedHabits, today]);
 
   const isCurrentMonth = isSameMonth(currentMonth, new Date());
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading tracker...</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* ===== HEADER ===== */}
+      {/* HEADER */}
       <View style={styles.header}>
         <Text style={[styles.title, isMobile && styles.titleMobile]}>
           📊 Monthly Overview
         </Text>
 
-        {/* Month Navigation */}
         <View style={styles.monthNav}>
           <Pressable onPress={goToPrevMonth} style={styles.navBtn}>
             <Text style={styles.navBtnText}>◀</Text>
@@ -190,16 +196,14 @@ export default function MonthlyOverview() {
             style={[styles.navBtn, isCurrentMonth && styles.navBtnDisabled]}
             disabled={isCurrentMonth}
           >
-            <Text
-              style={[styles.navBtnText, isCurrentMonth && styles.navBtnTextDisabled]}
-            >
+            <Text style={[styles.navBtnText, isCurrentMonth && styles.navBtnTextDisabled]}>
               ▶
             </Text>
           </Pressable>
         </View>
       </View>
 
-      {/* ===== STATS CARDS ===== */}
+      {/* STATS */}
       <View style={styles.statsContainer}>
         <View style={[styles.statCard, { backgroundColor: "#E8F5E9" }]}>
           <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>
@@ -219,7 +223,7 @@ export default function MonthlyOverview() {
         </View>
         <View style={[styles.statCard, { backgroundColor: "#FFF3E0" }]}>
           <Text style={[styles.statValue, isMobile && styles.statValueMobile]}>
-            {habits.length}
+            {trackedHabits.length}
           </Text>
           <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>
             Habits
@@ -227,13 +231,13 @@ export default function MonthlyOverview() {
         </View>
       </View>
 
-      {/* ===== TABLE ===== */}
-      {habits.length === 0 ? (
+      {/* TABLE */}
+      {trackedHabits.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📝</Text>
-          <Text style={styles.emptyTitle}>No habits to track</Text>
+          <Text style={styles.emptyTitle}>No habits being tracked</Text>
           <Text style={styles.emptySubtitle}>
-            Add some habits in the Habit List card to start tracking!
+            Add habits in the Daily Tracker to see them here!
           </Text>
         </View>
       ) : (
@@ -241,63 +245,42 @@ export default function MonthlyOverview() {
           horizontal
           showsHorizontalScrollIndicator={true}
           style={styles.tableScroll}
-          contentContainerStyle={styles.tableScrollContent}
         >
           <View style={styles.table}>
-            {/* ===== HEADER ROW ===== */}
+            {/* HEADER ROW */}
             <View style={styles.tableRow}>
               <View style={[styles.cell, styles.headerCell, { width: DATE_CELL_WIDTH }]}>
-                <Text style={[styles.headerText, isMobile && styles.headerTextMobile]}>
-                  Day
-                </Text>
+                <Text style={styles.headerText}>Day</Text>
               </View>
 
-              {habits.map((habit) => (
-                <View
+              {trackedHabits.map((habit) => (
+                <Pressable
                   key={habit.id}
                   style={[styles.cell, styles.headerCell, { width: CELL_WIDTH }]}
+                  onLongPress={(e) => showTooltip(habit.title, e)}
+                  onPressOut={hideTooltip}
+                  delayLongPress={200}
                 >
-                  <View style={[styles.habitColorDot, { backgroundColor: habit.color }]} />
-                  <Text
-                    style={[styles.headerText, isMobile && styles.headerTextMobile]}
-                    numberOfLines={1}
-                  >
-                    {isSmallMobile
-                      ? habit.title.substring(0, 3)
-                      : isMobile
-                      ? habit.title.substring(0, 4)
-                      : habit.title.substring(0, 6)}
-                  </Text>
-                </View>
+                  <Text style={styles.habitEmoji}>{habit.emoji}</Text>
+                </Pressable>
               ))}
 
               <View style={[styles.cell, styles.headerCell, { width: PERCENT_CELL_WIDTH }]}>
-                <Text style={[styles.headerText, isMobile && styles.headerTextMobile]}>
-                  %
-                </Text>
+                <Text style={styles.headerText}>%</Text>
               </View>
 
               <View style={[styles.cell, styles.headerCell, { width: EMOJI_CELL_WIDTH }]}>
                 <Text style={styles.headerText}>😊</Text>
               </View>
 
-              <View
-                style={[
-                  styles.cell,
-                  styles.headerCell,
-                  styles.lastCell,
-                  { width: NOTES_CELL_WIDTH },
-                ]}
-              >
-                <Text style={[styles.headerText, isMobile && styles.headerTextMobile]}>
-                  Notes
-                </Text>
+              <View style={[styles.cell, styles.headerCell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
+                <Text style={styles.headerText}>Notes</Text>
               </View>
             </View>
 
-            {/* ===== DATA ROWS ===== */}
+            {/* DATA ROWS */}
             <ScrollView
-              style={[styles.dataScroll, isMobile && styles.dataScrollMobile]}
+              style={styles.dataScroll}
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
             >
@@ -321,44 +304,31 @@ export default function MonthlyOverview() {
                       isYesterdayRow && styles.yesterdayRow,
                     ]}
                   >
-                    {/* DATE CELL */}
                     <View style={[styles.cell, { width: DATE_CELL_WIDTH }]}>
-                      <Text
-                        style={[
-                          styles.dateText,
-                          isTodayRow && styles.todayText,
-                          isMobile && styles.dateTextMobile,
-                        ]}
-                      >
+                      <Text style={[styles.dateText, isTodayRow && styles.todayText]}>
                         {format(day, "EEE")}
                       </Text>
-                      <Text
-                        style={[
-                          styles.dateNumber,
-                          isTodayRow && styles.todayText,
-                          isMobile && styles.dateNumberMobile,
-                        ]}
-                      >
+                      <Text style={[styles.dateNumber, isTodayRow && styles.todayText]}>
                         {format(day, "dd")}
                       </Text>
                       {isTodayRow && (
-                        <View style={[styles.todayBadge, isMobile && styles.todayBadgeMobile]}>
-                          <Text style={[styles.todayBadgeText, isMobile && styles.todayBadgeTextMobile]}>
-                            TODAY
-                          </Text>
+                        <View style={styles.todayBadge}>
+                          <Text style={styles.todayBadgeText}>TODAY</Text>
                         </View>
                       )}
                     </View>
 
-                    {/* HABIT CELLS */}
-                    {habits.map((habit) => {
-                      const done = entry?.completedHabitIds?.includes(habit.id) || false;
+                    {trackedHabits.map((habit) => {
+                      const done = entry.completedHabitIds?.includes(habit.id) || false;
 
                       return (
                         <Pressable
                           key={habit.id}
                           disabled={!canEdit}
                           onPress={() => handleToggle(key, habit.id)}
+                          onLongPress={(e) => showTooltip(habit.title, e)}
+                          onPressOut={hideTooltip}
+                          delayLongPress={300}
                           style={[
                             styles.cell,
                             { width: CELL_WIDTH },
@@ -366,19 +336,17 @@ export default function MonthlyOverview() {
                             !canEdit && styles.disabledCell,
                           ]}
                         >
-                          <Text style={[styles.checkIcon, isMobile && styles.checkIconMobile]}>
+                          <Text style={styles.checkIcon}>
                             {isFuture ? "—" : done ? "✅" : canEdit ? "⬜" : "❌"}
                           </Text>
                         </Pressable>
                       );
                     })}
 
-                    {/* PROGRESS CELL */}
                     <View style={[styles.cell, { width: PERCENT_CELL_WIDTH }]}>
                       <Text
                         style={[
                           styles.percentText,
-                          isMobile && styles.percentTextMobile,
                           progress === 100 && styles.fullProgress,
                           progress >= 70 && progress < 100 && styles.highProgress,
                           progress > 0 && progress < 50 && styles.lowProgress,
@@ -388,45 +356,35 @@ export default function MonthlyOverview() {
                       </Text>
                     </View>
 
-                    {/* EMOJI CELL */}
                     <View style={[styles.cell, { width: EMOJI_CELL_WIDTH }]}>
-                      <Text style={[styles.emojiText, isMobile && styles.emojiTextMobile]}>
+                      <Text style={styles.emojiText}>
                         {isFuture ? "—" : getDayEmoji(progress)}
                       </Text>
                     </View>
 
-                    {/* NOTES CELL */}
                     <View style={[styles.cell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
                       <TextInput
-                        value={entry?.note || ""}
+                        value={entry.note || ""}
                         editable={canEdit}
                         placeholder={canEdit ? "Note..." : "—"}
                         placeholderTextColor="#999"
                         onChangeText={(text) => updateNote(key, text)}
-                        style={[
-                          styles.notesInput,
-                          isMobile && styles.notesInputMobile,
-                          !canEdit && styles.disabledInput,
-                        ]}
+                        style={[styles.notesInput, !canEdit && styles.disabledInput]}
                         maxLength={30}
                       />
                     </View>
 
-                    {/* 🎉 CELEBRATION */}
                     {celebratingDay === key && progress === 100 && (
                       <Animated.View
                         style={[
                           styles.celebrateBadge,
-                          isMobile && styles.celebrateBadgeMobile,
                           {
                             opacity: celebrationAnim,
                             transform: [{ scale: celebrationAnim }],
                           },
                         ]}
                       >
-                        <Text style={[styles.celebrateText, isMobile && styles.celebrateTextMobile]}>
-                          🎉 Perfect! 🎊
-                        </Text>
+                        <Text style={styles.celebrateText}>🎉 Perfect! 🎊</Text>
                       </Animated.View>
                     )}
                   </View>
@@ -437,23 +395,42 @@ export default function MonthlyOverview() {
         </ScrollView>
       )}
 
-      {/* ===== LEGEND ===== */}
-      <View style={[styles.legend, isMobile && styles.legendMobile]}>
+      {/* TOOLTIP */}
+      <Modal
+        visible={tooltipVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={hideTooltip}
+      >
+        <Pressable style={styles.tooltipOverlay} onPress={hideTooltip}>
+          <View
+            style={[
+              styles.tooltip,
+              { left: Math.max(10, tooltipPosition.x - 60), top: tooltipPosition.y },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{tooltipText}</Text>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* LEGEND */}
+      <View style={styles.legend}>
         <View style={styles.legendItem}>
-          <Text style={[styles.legendIcon, isMobile && styles.legendIconMobile]}>✅</Text>
-          <Text style={[styles.legendText, isMobile && styles.legendTextMobile]}>Done</Text>
+          <Text style={styles.legendIcon}>✅</Text>
+          <Text style={styles.legendText}>Done</Text>
         </View>
         <View style={styles.legendItem}>
-          <Text style={[styles.legendIcon, isMobile && styles.legendIconMobile]}>⬜</Text>
-          <Text style={[styles.legendText, isMobile && styles.legendTextMobile]}>Edit</Text>
+          <Text style={styles.legendIcon}>⬜</Text>
+          <Text style={styles.legendText}>Edit</Text>
         </View>
         <View style={styles.legendItem}>
-          <Text style={[styles.legendIcon, isMobile && styles.legendIconMobile]}>❌</Text>
-          <Text style={[styles.legendText, isMobile && styles.legendTextMobile]}>Missed</Text>
+          <Text style={styles.legendIcon}>❌</Text>
+          <Text style={styles.legendText}>Missed</Text>
         </View>
         <View style={styles.legendItem}>
-          <Text style={[styles.legendIcon, isMobile && styles.legendIconMobile]}>—</Text>
-          <Text style={[styles.legendText, isMobile && styles.legendTextMobile]}>Future</Text>
+          <Text style={styles.legendIcon}>—</Text>
+          <Text style={styles.legendText}>Future</Text>
         </View>
       </View>
     </View>
@@ -480,7 +457,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 40,
     alignItems: "center",
-    marginVertical: 8,
   },
 
   loadingText: {
@@ -488,7 +464,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  /* ===== HEADER ===== */
   header: {
     marginBottom: 12,
   },
@@ -503,7 +478,6 @@ const styles = StyleSheet.create({
 
   titleMobile: {
     fontSize: 18,
-    marginBottom: 8,
   },
 
   monthNav: {
@@ -557,7 +531,6 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  /* ===== STATS ===== */
   statsContainer: {
     flexDirection: "row",
     gap: 8,
@@ -586,14 +559,12 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 2,
     fontWeight: "500",
-    textAlign: "center",
   },
 
   statLabelMobile: {
     fontSize: 9,
   },
 
-  /* ===== EMPTY STATE ===== */
   emptyState: {
     alignItems: "center",
     paddingVertical: 30,
@@ -695,6 +666,10 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     marginBottom: 2,
+  },
+
+  habitEmoji: {
+    fontSize: 16,
   },
 
   completedCell: {
@@ -836,6 +811,35 @@ const styles = StyleSheet.create({
 
   celebrateTextMobile: {
     fontSize: 8,
+  },
+
+  /* ===== TOOLTIP ===== */
+  tooltipOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  tooltip: {
+    position: "absolute",
+    backgroundColor: "#333",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    maxWidth: 200,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+
+  tooltipText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
   },
 
   /* ===== LEGEND ===== */

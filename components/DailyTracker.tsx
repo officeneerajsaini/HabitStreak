@@ -1,3 +1,6 @@
+// components/DailyTracker.tsx
+
+import { useTracker } from "@/context/TrackerContext";
 import {
   addDays,
   format,
@@ -6,703 +9,970 @@ import {
   startOfDay,
   subDays,
 } from "date-fns";
+import * as Haptics from "expo-haptics";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
-  
-  /* ================= TYPES ================= */
-  
-  type Task = {
-    id: string;
-    title: string;
-  };
-  
-  type DailyEntry = {
-    completedTaskIds: string[];
-    note: string;
-  };
-  
-  type DailyData = {
-    [date: string]: DailyEntry;
-  };
-  
-  /* ================= HELPERS ================= */
-  
-  function get7Days() {
-    const today = startOfDay(new Date());
-    return Array.from({ length: 7 }, (_, i) => addDays(today, i - 3));
+
+/* ================= CONSTANTS ================= */
+
+const CELL_WIDTH = 50;
+const DATE_CELL_WIDTH = 80;
+const PERCENT_CELL_WIDTH = 50;
+const EMOJI_CELL_WIDTH = 45;
+const NOTES_CELL_WIDTH = 100;
+
+/* ================= HELPERS ================= */
+
+function get7Days() {
+  const today = startOfDay(new Date());
+  return Array.from({ length: 7 }, (_, i) => addDays(today, i - 3));
+}
+
+/* ================= COMPONENT ================= */
+
+export default function DailyTracker() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 500;
+
+  const {
+    trackedHabits,
+    addTrackedHabit,
+    deleteTrackedHabit,
+    trackerData,
+    toggleCompletion,
+    updateNote,
+    getProgress,
+    getDayEntry,
+    isLoading,
+  } = useTracker();
+
+  const days = useMemo(get7Days, []);
+  const today = startOfDay(new Date());
+  const yesterday = subDays(today, 1);
+
+  /* ===== LOCAL STATE ===== */
+  const [newHabitTitle, setNewHabitTitle] = useState("");
+  const [newHabitEmoji, setNewHabitEmoji] = useState("");
+  const [selectedDeleteId, setSelectedDeleteId] = useState<string>("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  // Tooltip state
+  const [tooltipVisible, setTooltipVisible] = useState(false);
+  const [tooltipText, setTooltipText] = useState("");
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+
+  /* ===== CELEBRATION ===== */
+  const celebrationAnim = useRef(new Animated.Value(0)).current;
+  const [celebratingDay, setCelebratingDay] = useState<string | null>(null);
+
+  /* ================= HANDLERS ================= */
+
+  function handleAddHabit() {
+    if (!newHabitTitle.trim()) return;
+
+    addTrackedHabit(newHabitTitle, newHabitEmoji || "📌");
+    setNewHabitTitle("");
+    setNewHabitEmoji("");
+    setShowAddForm(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
-  
-  /* ================= CONSTANTS ================= */
-  
-  const CELL_WIDTH = 70;
-  const DATE_CELL_WIDTH = 80;
-  const PERCENT_CELL_WIDTH = 50;
-  const EMOJI_CELL_WIDTH = 45;
-  const NOTES_CELL_WIDTH = 120;
-  
-  /* ================= COMPONENT ================= */
-  
-  export default function DailyTracker() {
-    const days = useMemo(get7Days, []);
-    const today = startOfDay(new Date());
-    const yesterday = subDays(today, 1);
-  
-    /* ===== TASKS ===== */
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [newTask, setNewTask] = useState("");
-    const [selectedDeleteId, setSelectedDeleteId] = useState<string>("");
-    const [showDropdown, setShowDropdown] = useState(false);
-  
-    /* ===== DAILY DATA ===== */
-    const [data, setData] = useState<DailyData>(() => {
-      const obj: DailyData = {};
-      days.forEach((d) => {
-        obj[format(d, "yyyy-MM-dd")] = {
-          completedTaskIds: [],
-          note: "",
-        };
-      });
-      return obj;
-    });
-  
-    /* ===== CELEBRATION ===== */
-    const celebrationAnim = useRef(new Animated.Value(0)).current;
-    const [celebratingDay, setCelebratingDay] = useState<string | null>(null);
-  
-    /* ================= LOGIC ================= */
-  
-    function addTask() {
-      if (!newTask.trim()) return;
-  
-      setTasks((prev) => [
-        ...prev,
-        { id: Date.now().toString(), title: newTask.trim() },
-      ]);
-  
-      setNewTask("");
-    }
-  
-    function deleteTask() {
-      if (!selectedDeleteId) return;
-  
-      setTasks((prev) => prev.filter((t) => t.id !== selectedDeleteId));
-  
-      setData((prev) => {
-        const updated: DailyData = {};
-        Object.keys(prev).forEach((k) => {
-          updated[k] = {
-            ...prev[k],
-            completedTaskIds: prev[k].completedTaskIds.filter(
-              (id) => id !== selectedDeleteId
-            ),
-          };
+
+  function handleDeleteHabit() {
+    if (!selectedDeleteId) return;
+    deleteTrackedHabit(selectedDeleteId);
+    setSelectedDeleteId("");
+    setShowDropdown(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }
+
+  function handleToggle(dateKey: string, habitId: string) {
+    toggleCompletion(dateKey, habitId);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+
+  function isEditable(day: Date): boolean {
+    return isSameDay(day, today) || isSameDay(day, yesterday);
+  }
+
+  function getDayEmoji(progress: number) {
+    if (progress < 50) return "🤨";
+    if (progress < 70) return "😊";
+    if (progress < 100) return "😄";
+    return "🥳";
+  }
+
+  // Show tooltip with habit name
+  function showTooltip(text: string, event: any) {
+    const { pageX, pageY } = event.nativeEvent;
+    setTooltipText(text);
+    setTooltipPosition({ x: pageX, y: pageY - 50 });
+    setTooltipVisible(true);
+  }
+
+  function hideTooltip() {
+    setTooltipVisible(false);
+  }
+
+  /* ===== CELEBRATION TRIGGER ===== */
+  useEffect(() => {
+    days.forEach((day) => {
+      const key = format(day, "yyyy-MM-dd");
+      const progress = getProgress(key);
+
+      if (progress === 100 && celebratingDay !== key && !isAfter(day, today)) {
+        setCelebratingDay(key);
+        celebrationAnim.setValue(0);
+
+        Animated.timing(celebrationAnim, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.out(Easing.back(1.6)),
+          useNativeDriver: true,
+        }).start(() => {
+          setTimeout(() => setCelebratingDay(null), 1500);
         });
-        return updated;
-      });
-  
-      setSelectedDeleteId("");
-      setShowDropdown(false);
-    }
-  
-    function toggleTask(dateKey: string, taskId: string) {
-      setData((prev) => {
-        const entry = prev[dateKey];
-        const exists = entry.completedTaskIds.includes(taskId);
-  
-        return {
-          ...prev,
-          [dateKey]: {
-            ...entry,
-            completedTaskIds: exists
-              ? entry.completedTaskIds.filter((id) => id !== taskId)
-              : [...entry.completedTaskIds, taskId],
-          },
-        };
-      });
-    }
-  
-    function getProgress(dateKey: string) {
-      if (tasks.length === 0) return 0;
-      return Math.round(
-        (data[dateKey].completedTaskIds.length / tasks.length) * 100
-      );
-    }
-  
-    function getDayEmoji(progress: number) {
-      if (progress < 50) return "🤨";
-      if (progress < 70) return "😊";
-      if (progress < 100) return "😄";
-      return "🤭";
-    }
-  
-    /* ===== CELEBRATION TRIGGER ===== */
-  
-    useEffect(() => {
-      days.forEach((day) => {
-        const key = format(day, "yyyy-MM-dd");
-        const progress = getProgress(key);
-  
-        if (progress === 100 && celebratingDay !== key) {
-          setCelebratingDay(key);
-          celebrationAnim.setValue(0);
-  
-          Animated.timing(celebrationAnim, {
-            toValue: 1,
-            duration: 600,
-            easing: Easing.out(Easing.back(1.6)),
-            useNativeDriver: true,
-          }).start(() => {
-            setTimeout(() => setCelebratingDay(null), 1500);
-          });
-        }
-      });
-    }, [data, tasks]);
-  
-    /* ================= UI ================= */
-  
+      }
+    });
+  }, [trackerData, trackedHabits]);
+
+  if (isLoading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>📋 Daily Habit Tracker</Text>
-  
-        {/* TABLE CONTAINER */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-          <View style={styles.table}>
-            {/* ===== HEADER ROW ===== */}
-            <View style={styles.tableRow}>
-              <View style={[styles.cell, styles.headerCell, styles.dateCell]}>
-                <Text style={styles.headerText}>Day</Text>
-              </View>
-  
-              {tasks.map((t) => (
-                <View
-                  key={t.id}
-                  style={[styles.cell, styles.headerCell, styles.taskCell]}
-                >
-                  <Text style={styles.headerText} numberOfLines={1}>
-                    {t.title}
-                  </Text>
-                </View>
-              ))}
-  
-              {tasks.length === 0 && (
-                <View style={[styles.cell, styles.headerCell, styles.taskCell]}>
-                  <Text style={styles.emptyText}>No tasks</Text>
-                </View>
-              )}
-  
-              <View
-                style={[styles.cell, styles.headerCell, styles.percentCell]}
-              >
-                <Text style={styles.headerText}>%</Text>
-              </View>
-  
-              <View style={[styles.cell, styles.headerCell, styles.emojiCell]}>
-                <Text style={styles.headerText}>😊</Text>
-              </View>
-  
-              <View style={[styles.cell, styles.headerCell, styles.notesCell]}>
-                <Text style={styles.headerText}>Notes</Text>
-              </View>
-            </View>
-  
-            {/* ===== DATA ROWS ===== */}
-            {days.map((day, rowIndex) => {
-              const key = format(day, "yyyy-MM-dd");
-              const isToday = isSameDay(day, today);
-              const isYesterday = isSameDay(day, yesterday);
-              const isFuture = isAfter(day, today);
-              const isEditable = isToday || isYesterday;
-              const progress = getProgress(key);
-              const isEvenRow = rowIndex % 2 === 0;
-  
-              return (
-                <View
-                  key={key}
-                  style={[
-                    styles.tableRow,
-                    isEvenRow && styles.evenRow,
-                    isToday && styles.todayRow,
-                  ]}
-                >
-                  {/* DATE CELL */}
-                  <View style={[styles.cell, styles.dateCell]}>
-                    <Text
-                      style={[styles.dateText, isToday && styles.todayText]}
-                    >
-                      {format(day, "EEE dd")}
-                    </Text>
-                    {isToday && <Text style={styles.todayBadge}>Today</Text>}
-                  </View>
-  
-                  {/* TASK CELLS */}
-                  {tasks.map((t) => {
-                    const done = data[key].completedTaskIds.includes(t.id);
-  
-                    return (
-                      <Pressable
-                        key={t.id}
-                        disabled={!isEditable}
-                        onPress={() => toggleTask(key, t.id)}
-                        style={[
-                          styles.cell,
-                          styles.taskCell,
-                          done && styles.completedCell,
-                          !isEditable && styles.disabledCell,
-                        ]}
-                      >
-                        <Text style={styles.checkIcon}>
-                          {done ? "✅" : isEditable ? "⬜" : "—"}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-  
-                  {tasks.length === 0 && (
-                    <View style={[styles.cell, styles.taskCell]}>
-                      <Text style={styles.emptyText}>—</Text>
-                    </View>
-                  )}
-  
-                  {/* PROGRESS CELL */}
-                  <View style={[styles.cell, styles.percentCell]}>
-                    <Text
-                      style={[
-                        styles.percentText,
-                        progress === 100 && styles.fullProgress,
-                        progress >= 70 && progress < 100 && styles.highProgress,
-                        progress < 50 && styles.lowProgress,
-                      ]}
-                    >
-                      {isFuture ? "—" : `${progress}%`}
-                    </Text>
-                  </View>
-  
-                  {/* EMOJI CELL */}
-                  <View style={[styles.cell, styles.emojiCell]}>
-                    <Text style={styles.emojiText}>
-                      {isFuture ? "—" : getDayEmoji(progress)}
-                    </Text>
-                  </View>
-  
-                  {/* NOTES CELL */}
-                  <View style={[styles.cell, styles.notesCell]}>
-                    <TextInput
-                      value={data[key].note}
-                      editable={isEditable}
-                      placeholder={isEditable ? "Add note..." : "—"}
-                      placeholderTextColor="#999"
-                      onChangeText={(text) =>
-                        setData((prev) => ({
-                          ...prev,
-                          [key]: { ...prev[key], note: text },
-                        }))
-                      }
-                      style={[
-                        styles.notesInput,
-                        !isEditable && styles.disabledInput,
-                      ]}
-                    />
-                  </View>
-  
-                  {/* 🎉 CELEBRATION */}
-                  {celebratingDay === key && progress === 100 && (
-                    <Animated.View
-                      style={[
-                        styles.celebrateBadge,
-                        {
-                          opacity: celebrationAnim,
-                          transform: [{ scale: celebrationAnim }],
-                        },
-                      ]}
-                    >
-                      <Text style={styles.celebrateText}>
-                        🎉 Great job! 🎊
-                      </Text>
-                    </Animated.View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </ScrollView>
-  
-        {/* ===== CONTROLS SECTION ===== */}
-        <View style={styles.controlsContainer}>
-          {/* ADD TASK */}
-          <View style={styles.controlRow}>
-            <Text style={styles.controlLabel}>Add Task:</Text>
-            <TextInput
-              value={newTask}
-              onChangeText={setNewTask}
-              placeholder="Enter task name..."
-              placeholderTextColor="#999"
-              style={styles.controlInput}
-              onSubmitEditing={addTask}
-            />
-            <Pressable onPress={addTask} style={styles.addButton}>
-              <Text style={styles.addButtonText}>+ Add</Text>
-            </Pressable>
-          </View>
-  
-          {/* DELETE TASK */}
-          {tasks.length > 0 && (
-            <View style={styles.controlRow}>
-              <Text style={styles.controlLabel}>Delete Task:</Text>
-              <Pressable
-                onPress={() => setShowDropdown(!showDropdown)}
-                style={styles.dropdownTrigger}
-              >
-                <Text style={styles.dropdownTriggerText}>
-                  {tasks.find((t) => t.id === selectedDeleteId)?.title ||
-                    "Select task..."}
-                </Text>
-                <Text style={styles.dropdownArrow}>▼</Text>
-              </Pressable>
-  
-              <Pressable
-                onPress={deleteTask}
-                style={[
-                  styles.deleteButton,
-                  !selectedDeleteId && styles.disabledButton,
-                ]}
-                disabled={!selectedDeleteId}
-              >
-                <Text style={styles.deleteButtonText}>🗑 Delete</Text>
-              </Pressable>
-  
-              {/* DROPDOWN */}
-              {showDropdown && (
-                <View style={styles.dropdown}>
-                  {tasks.map((t) => (
-                    <Pressable
-                      key={t.id}
-                      onPress={() => {
-                        setSelectedDeleteId(t.id);
-                        setShowDropdown(false);
-                      }}
-                      style={[
-                        styles.dropdownItem,
-                        selectedDeleteId === t.id && styles.dropdownItemSelected,
-                      ]}
-                    >
-                      <Text style={styles.dropdownItemText}>{t.title}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
-        </View>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading tracker...</Text>
       </View>
     );
   }
-  
-  /* ================= STYLES ================= */
-  
-  const styles = StyleSheet.create({
-    container: {
-      backgroundColor: "#FFF",
-      borderRadius: 16,
-      padding: 16,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-  
-    title: {
-      fontSize: 20,
-      fontWeight: "700",
-      marginBottom: 16,
-      color: "#1a1a2e",
-      textAlign: "center",
-    },
-  
-    /* ===== TABLE STYLES ===== */
-    table: {
-      borderWidth: 1,
-      borderColor: "#E0E0E0",
-      borderRadius: 8,
-      overflow: "hidden",
-    },
-  
-    tableRow: {
-      flexDirection: "row",
-      borderBottomWidth: 1,
-      borderBottomColor: "#E0E0E0",
-    },
-  
-    evenRow: {
-      backgroundColor: "#FAFAFA",
-    },
-  
-    todayRow: {
-      backgroundColor: "#E3F2FD",
-    },
-  
-    /* ===== CELL STYLES ===== */
-    cell: {
-      justifyContent: "center",
-      alignItems: "center",
-      paddingVertical: 10,
-      paddingHorizontal: 6,
-      borderRightWidth: 1,
-      borderRightColor: "#E0E0E0",
-    },
-  
-    headerCell: {
-      backgroundColor: "#3949AB",
-      paddingVertical: 12,
-    },
-  
-    headerText: {
-      color: "#FFF",
-      fontWeight: "600",
-      fontSize: 13,
-      textAlign: "center",
-    },
-  
-    dateCell: {
-      width: DATE_CELL_WIDTH,
-      alignItems: "flex-start",
-      paddingLeft: 10,
-    },
-  
-    taskCell: {
-      width: CELL_WIDTH,
-    },
-  
-    percentCell: {
-      width: PERCENT_CELL_WIDTH,
-    },
-  
-    emojiCell: {
-      width: EMOJI_CELL_WIDTH,
-    },
-  
-    notesCell: {
-      width: NOTES_CELL_WIDTH,
-      borderRightWidth: 0,
-    },
-  
-    completedCell: {
-      backgroundColor: "#E8F5E9",
-    },
-  
-    disabledCell: {
-      opacity: 0.5,
-    },
-  
-    /* ===== TEXT STYLES ===== */
-    dateText: {
-      fontWeight: "600",
-      fontSize: 13,
-      color: "#333",
-    },
-  
-    todayText: {
-      color: "#1565C0",
-      fontWeight: "700",
-    },
-  
-    todayBadge: {
-      fontSize: 9,
-      color: "#1565C0",
-      fontWeight: "600",
-      marginTop: 2,
-    },
-  
-    checkIcon: {
-      fontSize: 18,
-    },
-  
-    emptyText: {
-      color: "#999",
-      fontSize: 12,
-    },
-  
-    percentText: {
-      fontWeight: "700",
-      fontSize: 13,
-      color: "#666",
-    },
-  
-    fullProgress: {
-      color: "#2E7D32",
-    },
-  
-    highProgress: {
-      color: "#F57C00",
-    },
-  
-    lowProgress: {
-      color: "#D32F2F",
-    },
-  
-    emojiText: {
-      fontSize: 18,
-    },
-  
-    notesInput: {
-      flex: 1,
-      fontSize: 12,
-      color: "#333",
-      paddingHorizontal: 4,
-      paddingVertical: 2,
-      width: "100%",
-    },
-  
-    disabledInput: {
-      color: "#999",
-    },
-  
-    /* ===== CELEBRATION ===== */
-    celebrateBadge: {
-      position: "absolute",
-      right: -10,
-      top: -8,
-      backgroundColor: "#4CAF50",
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      elevation: 6,
-      zIndex: 20,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-    },
-  
-    celebrateText: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: "#FFF",
-    },
-  
-    /* ===== CONTROLS ===== */
-    controlsContainer: {
-      marginTop: 20,
-      gap: 12,
-    },
-  
-    controlRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      position: "relative",
-    },
-  
-    controlLabel: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: "#555",
-      width: 80,
-    },
-  
-    controlInput: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: "#DDD",
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      fontSize: 14,
-      backgroundColor: "#FAFAFA",
-    },
-  
-    addButton: {
-      backgroundColor: "#4CAF50",
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 8,
-    },
-  
-    addButtonText: {
-      color: "#FFF",
-      fontWeight: "600",
-      fontSize: 14,
-    },
-  
-    dropdownTrigger: {
-      flex: 1,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: "#DDD",
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      backgroundColor: "#FAFAFA",
-    },
-  
-    dropdownTriggerText: {
-      fontSize: 14,
-      color: "#333",
-    },
-  
-    dropdownArrow: {
-      fontSize: 10,
-      color: "#666",
-    },
-  
-    dropdown: {
-      position: "absolute",
-      top: 44,
-      left: 88,
-      right: 90,
-      backgroundColor: "#FFF",
-      borderWidth: 1,
-      borderColor: "#DDD",
-      borderRadius: 8,
-      zIndex: 100,
-      elevation: 8,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-    },
-  
-    dropdownItem: {
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: "#EEE",
-    },
-  
-    dropdownItemSelected: {
-      backgroundColor: "#E3F2FD",
-    },
-  
-    dropdownItemText: {
-      fontSize: 14,
-      color: "#333",
-    },
-  
-    deleteButton: {
-      backgroundColor: "#F44336",
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderRadius: 8,
-    },
-  
-    disabledButton: {
-      backgroundColor: "#BDBDBD",
-    },
-  
-    deleteButtonText: {
-      color: "#FFF",
-      fontWeight: "600",
-      fontSize: 13,
-    },
-  });
+
+  return (
+    <View style={styles.container}>
+      <Text style={[styles.title, isMobile && styles.titleMobile]}>
+        📋 Daily Habit Tracker
+      </Text>
+      <Text style={styles.subtitle}>
+        {trackedHabits.length} habit{trackedHabits.length !== 1 ? "s" : ""} being tracked • Long press emoji to see name
+      </Text>
+
+      {/* TABLE */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+        <View style={styles.table}>
+          {/* ===== HEADER ROW ===== */}
+          <View style={styles.tableRow}>
+            <View style={[styles.cell, styles.headerCell, styles.dateCell]}>
+              <Text style={styles.headerText}>Day</Text>
+            </View>
+
+            {/* HABIT EMOJI HEADERS - Long press shows habit name */}
+            {trackedHabits.map((habit) => (
+              <Pressable
+                key={habit.id}
+                style={[styles.cell, styles.headerCell, styles.habitCell]}
+                onLongPress={(e) => showTooltip(habit.title, e)}
+                onPressOut={hideTooltip}
+                delayLongPress={200}
+              >
+                <Text style={styles.habitEmoji}>{habit.emoji}</Text>
+              </Pressable>
+            ))}
+
+            {trackedHabits.length === 0 && (
+              <View style={[styles.cell, styles.headerCell, styles.habitCell, { width: 100 }]}>
+                <Text style={styles.emptyHeaderText}>No habits</Text>
+              </View>
+            )}
+
+            <View style={[styles.cell, styles.headerCell, styles.percentCell]}>
+              <Text style={styles.headerText}>%</Text>
+            </View>
+
+            <View style={[styles.cell, styles.headerCell, styles.emojiCell]}>
+              <Text style={styles.headerText}>😊</Text>
+            </View>
+
+            <View style={[styles.cell, styles.headerCell, styles.notesCell]}>
+              <Text style={styles.headerText}>Notes</Text>
+            </View>
+          </View>
+
+          {/* ===== DATA ROWS ===== */}
+          {days.map((day, rowIndex) => {
+            const key = format(day, "yyyy-MM-dd");
+            const isToday = isSameDay(day, today);
+            const isYesterday = isSameDay(day, yesterday);
+            const isFuture = isAfter(day, today);
+            const canEdit = isEditable(day);
+            const progress = getProgress(key);
+            const isEvenRow = rowIndex % 2 === 0;
+            const entry = getDayEntry(key);
+
+            return (
+              <View
+                key={key}
+                style={[
+                  styles.tableRow,
+                  isEvenRow && styles.evenRow,
+                  isToday && styles.todayRow,
+                  isYesterday && styles.yesterdayRow,
+                ]}
+              >
+                {/* DATE CELL */}
+                <View style={[styles.cell, styles.dateCell]}>
+                  <Text style={[styles.dateText, isToday && styles.todayText]}>
+                    {format(day, "EEE dd")}
+                  </Text>
+                  {isToday && <Text style={styles.todayBadge}>Today</Text>}
+                </View>
+
+                {/* HABIT CELLS - ✅ Shows CHECKMARK only when done */}
+                {trackedHabits.map((habit) => {
+                  const done = entry.completedHabitIds?.includes(habit.id) || false;
+
+                  return (
+                    <Pressable
+                      key={habit.id}
+                      disabled={!canEdit}
+                      onPress={() => handleToggle(key, habit.id)}
+                      onLongPress={(e) => showTooltip(habit.title, e)}
+                      onPressOut={hideTooltip}
+                      delayLongPress={300}
+                      style={[
+                        styles.cell,
+                        styles.habitCell,
+                        done && styles.completedCell,
+                        !canEdit && styles.disabledCell,
+                      ]}
+                    >
+                      <Text style={styles.checkIcon}>
+                        {/* ✅ CHECKMARK ONLY for completed */}
+                        {isFuture ? "—" : done ? "✅" : canEdit ? "⬜" : "❌"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+
+                {trackedHabits.length === 0 && (
+                  <View style={[styles.cell, styles.habitCell, { width: 100 }]}>
+                    <Text style={styles.emptyText}>—</Text>
+                  </View>
+                )}
+
+                {/* PROGRESS CELL */}
+                <View style={[styles.cell, styles.percentCell]}>
+                  <Text
+                    style={[
+                      styles.percentText,
+                      progress === 100 && styles.fullProgress,
+                      progress >= 70 && progress < 100 && styles.highProgress,
+                      progress > 0 && progress < 50 && styles.lowProgress,
+                    ]}
+                  >
+                    {isFuture ? "—" : `${progress}%`}
+                  </Text>
+                </View>
+
+                {/* EMOJI CELL */}
+                <View style={[styles.cell, styles.emojiCell]}>
+                  <Text style={styles.emojiText}>
+                    {isFuture ? "—" : getDayEmoji(progress)}
+                  </Text>
+                </View>
+
+                {/* NOTES CELL */}
+                <View style={[styles.cell, styles.notesCell]}>
+                  <TextInput
+                    value={entry.note || ""}
+                    editable={canEdit}
+                    placeholder={canEdit ? "Note..." : "—"}
+                    placeholderTextColor="#999"
+                    onChangeText={(text) => updateNote(key, text)}
+                    style={[
+                      styles.notesInput,
+                      !canEdit && styles.disabledInput,
+                    ]}
+                    maxLength={50}
+                  />
+                </View>
+
+                {/* 🎉 CELEBRATION */}
+                {celebratingDay === key && progress === 100 && (
+                  <Animated.View
+                    style={[
+                      styles.celebrateBadge,
+                      {
+                        opacity: celebrationAnim,
+                        transform: [{ scale: celebrationAnim }],
+                      },
+                    ]}
+                  >
+                    <Text style={styles.celebrateText}>🎉 Great job! 🎊</Text>
+                  </Animated.View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {/* ===== TOOLTIP MODAL - Shows habit name on hover/long-press ===== */}
+      <Modal
+        visible={tooltipVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={hideTooltip}
+      >
+        <Pressable style={styles.tooltipOverlay} onPress={hideTooltip}>
+          <View
+            style={[
+              styles.tooltip,
+              { 
+                left: Math.max(10, Math.min(tooltipPosition.x - 60, width - 140)), 
+                top: tooltipPosition.y 
+              },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{tooltipText}</Text>
+            <View style={styles.tooltipArrow} />
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ===== ADD HABIT BUTTON ===== */}
+      <Pressable
+        onPress={() => setShowAddForm(!showAddForm)}
+        style={[styles.toggleAddBtn, showAddForm && styles.toggleAddBtnActive]}
+      >
+        <Text style={styles.toggleAddBtnText}>
+          {showAddForm ? "✕ Cancel" : "+ Add Habit to Track"}
+        </Text>
+      </Pressable>
+
+      {/* ===== ADD FORM ===== */}
+      {showAddForm && (
+        <View style={styles.addForm}>
+          <Text style={styles.addFormTitle}>🎯 Add Habit to Track</Text>
+
+          <View style={styles.inputRow}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Habit Name</Text>
+              <TextInput
+                value={newHabitTitle}
+                onChangeText={setNewHabitTitle}
+                placeholder="e.g., Drink Water"
+                placeholderTextColor="#999"
+                style={styles.input}
+                maxLength={30}
+              />
+            </View>
+
+            <View style={styles.emojiInputGroup}>
+              <Text style={styles.inputLabel}>Emoji</Text>
+              <TextInput
+                value={newHabitEmoji}
+                onChangeText={setNewHabitEmoji}
+                placeholder="💧"
+                placeholderTextColor="#999"
+                style={styles.emojiInput}
+                maxLength={2}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.inputHint}>
+            💡 Emoji shows in table header • Long-press to see habit name
+          </Text>
+
+          <Pressable
+            onPress={handleAddHabit}
+            style={[
+              styles.addButton,
+              !newHabitTitle.trim() && styles.addButtonDisabled,
+            ]}
+            disabled={!newHabitTitle.trim()}
+          >
+            <Text style={styles.addButtonText}>+ Add to Tracker</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ===== DELETE SECTION ===== */}
+      {trackedHabits.length > 0 && (
+        <View style={styles.deleteSection}>
+          <Text style={styles.deleteSectionTitle}>🗑 Remove from Tracking</Text>
+
+          <View style={styles.deleteRow}>
+            <Pressable
+              onPress={() => setShowDropdown(!showDropdown)}
+              style={styles.dropdownTrigger}
+            >
+              <Text style={styles.dropdownTriggerText}>
+                {trackedHabits.find((h) => h.id === selectedDeleteId)
+                  ? `${trackedHabits.find((h) => h.id === selectedDeleteId)?.emoji} ${trackedHabits.find((h) => h.id === selectedDeleteId)?.title}`
+                  : "Select habit..."}
+              </Text>
+              <Text style={styles.dropdownArrow}>{showDropdown ? "▲" : "▼"}</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={handleDeleteHabit}
+              style={[
+                styles.deleteButton,
+                !selectedDeleteId && styles.deleteButtonDisabled,
+              ]}
+              disabled={!selectedDeleteId}
+            >
+              <Text style={styles.deleteButtonText}>🗑 Delete</Text>
+            </Pressable>
+          </View>
+
+          {/* DROPDOWN */}
+          {showDropdown && (
+            <View style={styles.dropdown}>
+              {trackedHabits.map((habit) => (
+                <Pressable
+                  key={habit.id}
+                  onPress={() => {
+                    setSelectedDeleteId(habit.id);
+                    setShowDropdown(false);
+                  }}
+                  style={[
+                    styles.dropdownItem,
+                    selectedDeleteId === habit.id && styles.dropdownItemSelected,
+                  ]}
+                >
+                  <Text style={styles.dropdownEmoji}>{habit.emoji}</Text>
+                  <Text style={styles.dropdownItemText}>{habit.title}</Text>
+                  {selectedDeleteId === habit.id && (
+                    <Text style={styles.dropdownCheck}>✓</Text>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* ===== LEGEND ===== */}
+      <View style={styles.legend}>
+        <View style={styles.legendItem}>
+          <Text style={styles.legendIcon}>✅</Text>
+          <Text style={styles.legendText}>Done</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Text style={styles.legendIcon}>⬜</Text>
+          <Text style={styles.legendText}>Editable</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Text style={styles.legendIcon}>❌</Text>
+          <Text style={styles.legendText}>Missed</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Text style={styles.legendIcon}>—</Text>
+          <Text style={styles.legendText}>Future</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/* ================= STYLES ================= */
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  loadingContainer: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 40,
+    alignItems: "center",
+    marginVertical: 8,
+  },
+
+  loadingText: {
+    color: "#666",
+    fontSize: 14,
+  },
+
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1a1a2e",
+    textAlign: "center",
+  },
+
+  titleMobile: {
+    fontSize: 18,
+  },
+
+  subtitle: {
+    fontSize: 11,
+    color: "#888",
+    textAlign: "center",
+    marginBottom: 16,
+    marginTop: 4,
+  },
+
+  /* ===== TABLE ===== */
+  table: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E0E0E0",
+  },
+
+  evenRow: {
+    backgroundColor: "#FAFAFA",
+  },
+
+  todayRow: {
+    backgroundColor: "#E8F5E9",
+  },
+
+  yesterdayRow: {
+    backgroundColor: "#FFF8E1",
+  },
+
+  /* ===== CELLS ===== */
+  cell: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRightWidth: 1,
+    borderRightColor: "#E0E0E0",
+  },
+
+  headerCell: {
+    backgroundColor: "#3949AB",
+    paddingVertical: 12,
+  },
+
+  headerText: {
+    color: "#FFF",
+    fontWeight: "600",
+    fontSize: 12,
+  },
+
+  emptyHeaderText: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 11,
+  },
+
+  habitEmoji: {
+    fontSize: 18,
+  },
+
+  dateCell: {
+    width: DATE_CELL_WIDTH,
+    alignItems: "flex-start",
+    paddingLeft: 10,
+  },
+
+  habitCell: {
+    width: CELL_WIDTH,
+  },
+
+  percentCell: {
+    width: PERCENT_CELL_WIDTH,
+  },
+
+  emojiCell: {
+    width: EMOJI_CELL_WIDTH,
+  },
+
+  notesCell: {
+    width: NOTES_CELL_WIDTH,
+    borderRightWidth: 0,
+  },
+
+  completedCell: {
+    backgroundColor: "rgba(76, 175, 80, 0.15)",
+  },
+
+  disabledCell: {
+    opacity: 0.6,
+  },
+
+  /* ===== TEXT ===== */
+  dateText: {
+    fontWeight: "600",
+    fontSize: 13,
+    color: "#333",
+  },
+
+  todayText: {
+    color: "#2E7D32",
+    fontWeight: "700",
+  },
+
+  todayBadge: {
+    fontSize: 9,
+    color: "#2E7D32",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  checkIcon: {
+    fontSize: 16,
+  },
+
+  emptyText: {
+    color: "#999",
+    fontSize: 12,
+  },
+
+  percentText: {
+    fontWeight: "700",
+    fontSize: 12,
+    color: "#666",
+  },
+
+  fullProgress: {
+    color: "#2E7D32",
+  },
+
+  highProgress: {
+    color: "#F57C00",
+  },
+
+  lowProgress: {
+    color: "#D32F2F",
+  },
+
+  emojiText: {
+    fontSize: 16,
+  },
+
+  notesInput: {
+    flex: 1,
+    fontSize: 11,
+    color: "#333",
+    paddingHorizontal: 4,
+    width: "100%",
+  },
+
+  disabledInput: {
+    color: "#999",
+  },
+
+  /* ===== CELEBRATION ===== */
+  celebrateBadge: {
+    position: "absolute",
+    right: -5,
+    top: -8,
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    elevation: 6,
+    zIndex: 20,
+  },
+
+  celebrateText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+
+  /* ===== TOOLTIP ===== */
+  tooltipOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.2)",
+  },
+
+  tooltip: {
+    position: "absolute",
+    backgroundColor: "#333",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    maxWidth: 180,
+    minWidth: 80,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
+  },
+
+  tooltipText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+
+  tooltipArrow: {
+    position: "absolute",
+    bottom: -8,
+    left: "50%",
+    marginLeft: -8,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderTopWidth: 8,
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderTopColor: "#333",
+  },
+
+  /* ===== ADD FORM ===== */
+  toggleAddBtn: {
+    backgroundColor: "#E8F5E9",
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#4CAF50",
+  },
+
+  toggleAddBtnActive: {
+    backgroundColor: "#FFEBEE",
+    borderColor: "#F44336",
+  },
+
+  toggleAddBtnText: {
+    color: "#333",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+
+  addForm: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+
+  addFormTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#333",
+    marginBottom: 14,
+  },
+
+  inputRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+
+  inputGroup: {
+    flex: 1,
+  },
+
+  emojiInputGroup: {
+    width: 80,
+  },
+
+  inputLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 6,
+    fontWeight: "600",
+  },
+
+  input: {
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: "#333",
+  },
+
+  emojiInput: {
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    fontSize: 20,
+    textAlign: "center",
+  },
+
+  inputHint: {
+    fontSize: 11,
+    color: "#888",
+    marginTop: 10,
+    fontStyle: "italic",
+  },
+
+  addButton: {
+    backgroundColor: "#4CAF50",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 16,
+  },
+
+  addButtonDisabled: {
+    backgroundColor: "#CCC",
+  },
+
+  addButtonText: {
+    color: "#FFF",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+
+  /* ===== DELETE SECTION ===== */
+  deleteSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#EEE",
+  },
+
+  deleteSectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 10,
+  },
+
+  deleteRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  dropdownTrigger: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F5F5F5",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+
+  dropdownTriggerText: {
+    fontSize: 14,
+    color: "#333",
+    flex: 1,
+  },
+
+  dropdownArrow: {
+    fontSize: 10,
+    color: "#666",
+    marginLeft: 8,
+  },
+
+  deleteButton: {
+    backgroundColor: "#F44336",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  deleteButtonDisabled: {
+    backgroundColor: "#CCC",
+  },
+
+  deleteButtonText: {
+    color: "#FFF",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+
+  dropdown: {
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 8,
+    marginTop: 8,
+    overflow: "hidden",
+  },
+
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEE",
+  },
+
+  dropdownItemSelected: {
+    backgroundColor: "#FFF3E0",
+  },
+
+  dropdownEmoji: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+
+  dropdownItemText: {
+    fontSize: 14,
+    color: "#333",
+    flex: 1,
+  },
+
+  dropdownCheck: {
+    color: "#4CAF50",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+
+  /* ===== LEGEND ===== */
+  legend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 16,
+    paddingTop: 14,
+    marginTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#EEE",
+  },
+
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  legendIcon: {
+    fontSize: 12,
+  },
+
+  legendText: {
+    fontSize: 11,
+    color: "#666",
+  },
+});

@@ -1,17 +1,14 @@
+// storage/habitStorage.tsx
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-/* ================= KEYS ================= */
-
-const HABIT_KEY = "HABITS_V1";
-const MONTHLY_DATA_KEY = "MONTHLY_TRACKING_V1";
 
 /* ================= TYPES ================= */
 
 export type Habit = {
   id: string;
   title: string;
-  createdAt: number;
   color: string;
+  createdAt: string;
 };
 
 export type DailyEntry = {
@@ -23,47 +20,12 @@ export type MonthlyData = {
   [date: string]: DailyEntry;
 };
 
-/* ================= HABITS ================= */
+/* ================= STORAGE KEYS ================= */
 
-export async function loadHabits(): Promise<Habit[]> {
-  try {
-    const data = await AsyncStorage.getItem(HABIT_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (error) {
-    console.error("Failed to load habits:", error);
-    return [];
-  }
-}
+const HABITS_KEY = "@habits";
+const MONTHLY_DATA_KEY = "@monthly_data";
 
-export async function saveHabits(habits: Habit[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(HABIT_KEY, JSON.stringify(habits));
-  } catch (error) {
-    console.error("Failed to save habits:", error);
-  }
-}
-
-/* ================= MONTHLY TRACKING DATA ================= */
-
-export async function loadMonthlyData(): Promise<MonthlyData> {
-  try {
-    const data = await AsyncStorage.getItem(MONTHLY_DATA_KEY);
-    return data ? JSON.parse(data) : {};
-  } catch (error) {
-    console.error("Failed to load monthly data:", error);
-    return {};
-  }
-}
-
-export async function saveMonthlyData(data: MonthlyData): Promise<void> {
-  try {
-    await AsyncStorage.setItem(MONTHLY_DATA_KEY, JSON.stringify(data));
-  } catch (error) {
-    console.error("Failed to save monthly data:", error);
-  }
-}
-
-/* ================= HELPER ================= */
+/* ================= HELPERS ================= */
 
 export function getEmptyEntry(): DailyEntry {
   return {
@@ -72,12 +34,42 @@ export function getEmptyEntry(): DailyEntry {
   };
 }
 
-/* ================= CLEAR ALL DATA (for debugging) ================= */
+/* ================= HABITS ================= */
 
-export async function clearAllData(): Promise<void> {
+export async function loadHabits(): Promise<Habit[]> {
   try {
-    await AsyncStorage.multiRemove([HABIT_KEY, MONTHLY_DATA_KEY]);
+    const json = await AsyncStorage.getItem(HABITS_KEY);
+    return json ? JSON.parse(json) : [];
   } catch (error) {
-    console.error("Failed to clear data:", error);
+    console.error("Error loading habits:", error);
+    return [];
+  }
+}
+
+export async function saveHabits(habits: Habit[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(HABITS_KEY, JSON.stringify(habits));
+  } catch (error) {
+    console.error("Error saving habits:", error);
+  }
+}
+
+/* ================= MONTHLY DATA ================= */
+
+export async function loadMonthlyData(): Promise<MonthlyData> {
+  try {
+    const json = await AsyncStorage.getItem(MONTHLY_DATA_KEY);
+    return json ? JSON.parse(json) : {};
+  } catch (error) {
+    console.error("Error loading monthly data:", error);
+    return {};
+  }
+}
+
+export async function saveMonthlyData(data: MonthlyData): Promise<void> {
+  try {
+    await AsyncStorage.setItem(MONTHLY_DATA_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.error("Error saving monthly data:", error);
   }
 }

@@ -4,7 +4,6 @@ import HabitListCard from "@/components/HabitListCard";
 import MonthlyOverview from "@/components/MonthlyOverview";
 import WinsAndPenalties from "@/components/WinsAndPenalties";
 import YearlyOverview from "@/components/YearlyOverview";
-import { HabitProvider } from "@/context/HabitContext";
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -15,7 +14,6 @@ export default function HomeScreen() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <HabitProvider>
       <ScrollView 
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -63,7 +61,6 @@ export default function HomeScreen() {
         </View>
 
       </ScrollView>
-      </HabitProvider>
     </GestureHandlerRootView>
   );
 }
@@ -85,8 +82,8 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 22,
+    fontWeight: "900",
     marginBottom: 12,
     color: "#FFF",
   },
