@@ -15,6 +15,7 @@ export interface Database {
           user_id: string
           title: string
           completed: boolean
+          priority: string
           date: string
           created_at: string
         }
@@ -23,6 +24,7 @@ export interface Database {
           user_id: string
           title: string
           completed?: boolean
+          priority?: string
           date: string
           created_at?: string
         }
@@ -31,6 +33,7 @@ export interface Database {
           user_id?: string
           title?: string
           completed?: boolean
+          priority?: string
           date?: string
           created_at?: string
         }
@@ -40,18 +43,56 @@ export interface Database {
           id: string
           user_id: string
           name: string
+          emoji: string
+          color: string
+          display_order: number
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
           name: string
+          emoji?: string
+          color?: string
+          display_order?: number
           created_at?: string
         }
         Update: {
           id?: string
           user_id?: string
           name?: string
+          emoji?: string
+          color?: string
+          display_order?: number
+          created_at?: string
+        }
+      }
+      tracked_habits: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          emoji: string
+          color: string
+          display_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          emoji?: string
+          color?: string
+          display_order?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          emoji?: string
+          color?: string
+          display_order?: number
           created_at?: string
         }
       }
@@ -59,25 +100,28 @@ export interface Database {
         Row: {
           id: string
           user_id: string
-          habit_id: string
+          tracked_habit_id: string
           date: string
           completed: boolean
+          note: string | null
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
-          habit_id: string
+          tracked_habit_id: string
           date: string
           completed?: boolean
+          note?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           user_id?: string
-          habit_id?: string
+          tracked_habit_id?: string
           date?: string
           completed?: boolean
+          note?: string | null
           created_at?: string
         }
       }

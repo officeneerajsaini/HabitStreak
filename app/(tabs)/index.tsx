@@ -1,5 +1,6 @@
 import DailyTracker from "@/components/DailyTracker";
 import GithubStyleHeatmap from "@/components/GithubStyleHeatmap";
+import GoalsManager from "@/components/GoalsManager";
 import HabitListCard from "@/components/HabitListCard";
 import MonthlyOverview from "@/components/MonthlyOverview";
 import TodoList from "@/components/ToDoList";
@@ -15,7 +16,7 @@ export default function HomeScreen() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -28,7 +29,7 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📅 Monthly Overview</Text>
-          <TodoList/>
+          <TodoList />
         </View>
 
         {/* 2️⃣ Habit List + Daily Tracker */}
@@ -60,6 +61,12 @@ export default function HomeScreen() {
           <YearlyOverview />
         </View>
 
+        {/* 🎯 My Goals */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🎯 My Goals</Text>
+          <GoalsManager />
+        </View>
+
         {/* 5️⃣ Rewards & Punishments */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🏆 Wins & Penalties</Text>
@@ -74,7 +81,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#1a1a1a",
   },
 
   scrollContent: {

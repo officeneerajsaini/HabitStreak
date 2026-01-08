@@ -1,178 +1,201 @@
-// context/TrackerContext.tsx
+import { addDays, format, startOfDay, subDays } from 'date-fns';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import {
+  createTrackedHabit,
+  deleteTrackedHabit as deleteTrackedHabitService,
+  fetchTrackedHabits,
+  type TrackedHabit,
+} from '../services/trackedHabitService';
+import {
+  fetchTrackingData,
+  toggleHabitCompletion,
+  updateDayNote,
+} from '../services/trackerService';
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-
-/* ================= TYPES ================= */
-
-export type TrackedHabit = {
-  id: string;
-  title: string;
-  emoji: string;  // NEW: emoji for display
-  color: string;
-  createdAt: string;
-};
-
-export type DailyEntry = {
+export interface DayEntry {
+  date: string;
   completedHabitIds: string[];
   note: string;
-};
+}
 
-export type TrackerData = {
-  [date: string]: DailyEntry;
-};
+export interface DailyEntry extends DayEntry {}
 
-type TrackerContextType = {
-  // Tracked Habits
+export interface TrackerData {
+  [date: string]: DayEntry;
+}
+
+interface TrackerContextType {
   trackedHabits: TrackedHabit[];
-  addTrackedHabit: (title: string, emoji: string) => void;
-  deleteTrackedHabit: (habitId: string) => void;
-
-  // Tracking Data
+  addTrackedHabit: (title: string, emoji: string) => Promise<void>;
+  deleteTrackedHabit: (id: string) => Promise<void>;
   trackerData: TrackerData;
-  toggleCompletion: (dateKey: string, habitId: string) => void;
-  updateNote: (dateKey: string, note: string) => void;
+  toggleCompletion: (dateKey: string, habitId: string) => Promise<void>;
+  updateNote: (dateKey: string, note: string) => Promise<void>;
   getProgress: (dateKey: string) => number;
-  getDayEntry: (dateKey: string) => DailyEntry;
-
-  // Loading State
+  getDayEntry: (dateKey: string) => DayEntry;
   isLoading: boolean;
-};
-
-/* ================= CONTEXT ================= */
+}
 
 const TrackerContext = createContext<TrackerContextType | undefined>(undefined);
 
-const TRACKED_HABITS_KEY = "@tracked_habits";
-const TRACKER_DATA_KEY = "@tracker_data";
+export const useTracker = () => {
+  const context = useContext(TrackerContext);
+  if (!context) {
+    throw new Error('useTracker must be used within TrackerProvider');
+  }
+  return context;
+};
 
-const COLORS = [
-  "#4CAF50", "#2196F3", "#FF9800", "#E91E63",
-  "#9C27B0", "#00BCD4", "#FF5722", "#607D8B",
-  "#3F51B5", "#009688", "#FFC107", "#795548",
-];
-
-/* ================= PROVIDER ================= */
-
-export function TrackerProvider({ children }: { children: ReactNode }) {
+export const TrackerProvider = ({ children }: { children: React.ReactNode }) => {
   const [trackedHabits, setTrackedHabits] = useState<TrackedHabit[]>([]);
   const [trackerData, setTrackerData] = useState<TrackerData>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  /* ===== LOAD DATA ===== */
+  // Load tracked habits and tracking data
   useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const [habitsJson, dataJson] = await Promise.all([
-          AsyncStorage.getItem(TRACKED_HABITS_KEY),
-          AsyncStorage.getItem(TRACKER_DATA_KEY),
-        ]);
-
-        if (habitsJson) {
-          setTrackedHabits(JSON.parse(habitsJson));
-        }
-        if (dataJson) {
-          setTrackerData(JSON.parse(dataJson));
-        }
-      } catch (error) {
-        console.error("Error loading tracker data:", error);
-      }
-      setIsLoading(false);
-    }
     loadData();
   }, []);
 
-  /* ===== SAVE TRACKED HABITS ===== */
-  useEffect(() => {
-    if (!isLoading) {
-      AsyncStorage.setItem(TRACKED_HABITS_KEY, JSON.stringify(trackedHabits));
-    }
-  }, [trackedHabits, isLoading]);
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
 
-  /* ===== SAVE TRACKER DATA ===== */
-  useEffect(() => {
-    if (!isLoading) {
-      AsyncStorage.setItem(TRACKER_DATA_KEY, JSON.stringify(trackerData));
-    }
-  }, [trackerData, isLoading]);
+      // Load tracked habits
+      const habits = await fetchTrackedHabits();
+      setTrackedHabits(habits);
 
-  /* ===== HABIT FUNCTIONS ===== */
+      // Load tracking data for the visible week
+      const today = startOfDay(new Date());
+      const startDate = format(subDays(today, 3), 'yyyy-MM-dd');
+      const endDate = format(addDays(today, 3), 'yyyy-MM-dd');
 
-  function addTrackedHabit(title: string, emoji: string) {
-    if (!title.trim()) return;
+      const trackingRecords = await fetchTrackingData(startDate, endDate);
 
-    const newHabit: TrackedHabit = {
-      id: Date.now().toString(),
-      title: title.trim(),
-      emoji: emoji.trim() || "✅",
-      color: COLORS[trackedHabits.length % COLORS.length],
-      createdAt: new Date().toISOString(),
-    };
+      // Convert to tracker data format
+      const dataByDate: TrackerData = {};
 
-    setTrackedHabits((prev) => [...prev, newHabit]);
-  }
+      trackingRecords.forEach(record => {
+        if (!dataByDate[record.date]) {
+          dataByDate[record.date] = {
+            date: record.date,
+            completedHabitIds: [],
+            note: record.note || '',
+          };
+        }
 
-  function deleteTrackedHabit(habitId: string) {
-    setTrackedHabits((prev) => prev.filter((h) => h.id !== habitId));
+        if (record.completed) {
+          dataByDate[record.date].completedHabitIds.push(record.tracked_habit_id);
+        }
 
-    // Remove from all tracking data
-    setTrackerData((prev) => {
-      const updated: TrackerData = {};
-      Object.keys(prev).forEach((key) => {
-        updated[key] = {
-          ...prev[key],
-          completedHabitIds: prev[key].completedHabitIds.filter((id) => id !== habitId),
-        };
+        if (record.note && record.note.length > dataByDate[record.date].note.length) {
+          dataByDate[record.date].note = record.note;
+        }
       });
-      return updated;
-    });
-  }
 
-  /* ===== TRACKING FUNCTIONS ===== */
+      setTrackerData(dataByDate);
+    } catch (error) {
+      console.error('Failed to load tracker data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  function toggleCompletion(dateKey: string, habitId: string) {
-    setTrackerData((prev) => {
-      const entry = prev[dateKey] || { completedHabitIds: [], note: "" };
-      const exists = entry.completedHabitIds.includes(habitId);
+  const addTrackedHabit = async (title: string, emoji: string) => {
+    try {
+      const newHabit = await createTrackedHabit(title, emoji);
+      setTrackedHabits([...trackedHabits, newHabit]);
+    } catch (error) {
+      console.error('Failed to add tracked habit:', error);
+      throw error;
+    }
+  };
 
-      return {
+  const deleteTrackedHabit = async (id: string) => {
+    try {
+      await deleteTrackedHabitService(id);
+      setTrackedHabits(trackedHabits.filter(h => h.id !== id));
+
+      // Remove from tracking data
+      setTrackerData(prev => {
+        const updated: TrackerData = {};
+        Object.keys(prev).forEach(key => {
+          updated[key] = {
+            ...prev[key],
+            completedHabitIds: prev[key].completedHabitIds.filter(habitId => habitId !== id),
+          };
+        });
+        return updated;
+      });
+    } catch (error) {
+      console.error('Failed to delete tracked habit:', error);
+      throw error;
+    }
+  };
+
+  const toggleCompletion = async (dateKey: string, habitId: string) => {
+    const dayEntry = getDayEntry(dateKey);
+    const isCurrentlyCompleted = dayEntry.completedHabitIds.includes(habitId);
+
+    // Optimistic update
+    const newCompletedIds = isCurrentlyCompleted
+      ? dayEntry.completedHabitIds.filter(id => id !== habitId)
+      : [...dayEntry.completedHabitIds, habitId];
+
+    setTrackerData(prev => ({
+      ...prev,
+      [dateKey]: {
+        ...dayEntry,
+        completedHabitIds: newCompletedIds,
+      },
+    }));
+
+    try {
+      await toggleHabitCompletion(habitId, dateKey, isCurrentlyCompleted);
+    } catch (error) {
+      // Revert on error
+      setTrackerData(prev => ({
         ...prev,
-        [dateKey]: {
-          ...entry,
-          completedHabitIds: exists
-            ? entry.completedHabitIds.filter((id) => id !== habitId)
-            : [...entry.completedHabitIds, habitId],
-        },
-      };
-    });
-  }
+        [dateKey]: dayEntry,
+      }));
+      console.error('Failed to toggle completion:', error);
+    }
+  };
 
-  function updateNote(dateKey: string, note: string) {
-    setTrackerData((prev) => {
-      const entry = prev[dateKey] || { completedHabitIds: [], note: "" };
-      return {
-        ...prev,
-        [dateKey]: {
-          ...entry,
-          note,
-        },
-      };
-    });
-  }
+  const updateNote = async (dateKey: string, note: string) => {
+    const dayEntry = getDayEntry(dateKey);
 
-  /* ===== HELPERS ===== */
+    // Optimistic update
+    setTrackerData(prev => ({
+      ...prev,
+      [dateKey]: {
+        ...dayEntry,
+        note,
+      },
+    }));
 
-  function getProgress(dateKey: string): number {
+    try {
+      if (trackedHabits.length > 0) {
+        await updateDayNote(trackedHabits[0].id, dateKey, note);
+      }
+    } catch (error) {
+      console.error('Failed to update note:', error);
+    }
+  };
+
+  const getProgress = (dateKey: string): number => {
     if (trackedHabits.length === 0) return 0;
-    const entry = trackerData[dateKey];
-    if (!entry) return 0;
-    return Math.round((entry.completedHabitIds.length / trackedHabits.length) * 100);
-  }
+    const dayEntry = getDayEntry(dateKey);
+    const completed = dayEntry.completedHabitIds.length;
+    return Math.round((completed / trackedHabits.length) * 100);
+  };
 
-  function getDayEntry(dateKey: string): DailyEntry {
-    return trackerData[dateKey] || { completedHabitIds: [], note: "" };
-  }
+  const getDayEntry = (dateKey: string): DayEntry => {
+    return trackerData[dateKey] || {
+      date: dateKey,
+      completedHabitIds: [],
+      note: '',
+    };
+  };
 
   return (
     <TrackerContext.Provider
@@ -191,14 +214,4 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
       {children}
     </TrackerContext.Provider>
   );
-}
-
-/* ================= HOOK ================= */
-
-export function useTracker() {
-  const context = useContext(TrackerContext);
-  if (!context) {
-    throw new Error("useTracker must be used within a TrackerProvider");
-  }
-  return context;
-}
+};

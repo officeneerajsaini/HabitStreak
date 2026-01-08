@@ -1,22 +1,23 @@
 import * as Haptics from "expo-haptics";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-    FlatList,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-
-type Priority = "high" | "medium" | "low";
-
-interface Todo {
-  id: string;
-  text: string;
-  completed: boolean;
-  priority: Priority;
-}
+import {
+  createTodo,
+  deleteTodo as deleteTodoService,
+  fetchTodosForToday,
+  toggleTodo as toggleTodoService,
+  type Priority,
+  type Todo,
+} from "../services/todoService";
 
 const PRIORITY_COLORS = {
   high: {
@@ -46,61 +47,122 @@ export default function TodoList() {
   const [inputText, setInputText] = useState("");
   const [selectedPriority, setSelectedPriority] = useState<Priority>("medium");
   const [showInput, setShowInput] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const addTodo = () => {
+  // Fetch todos on mount
+  useEffect(() => {
+    loadTodos();
+  }, []);
+
+  const loadTodos = async () => {
+    try {
+      setLoading(true);
+      const fetchedTodos = await fetchTodosForToday();
+      
+      // Sort by priority: high > medium > low
+      const sortedTodos = fetchedTodos.sort((a, b) => {
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      });
+      
+      setTodos(sortedTodos);
+    } catch (error) {
+      console.error('Failed to load todos:', error);
+      Alert.alert('Error', 'Failed to load tasks. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addTodo = async () => {
     if (inputText.trim() === "") return;
     if (todos.length >= MAX_TODOS) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Limit Reached', 'Maximum 5 tasks per day');
       return;
     }
 
-    const newTodo: Todo = {
-      id: Date.now().toString(),
-      text: inputText.trim(),
-      completed: false,
-      priority: selectedPriority,
-    };
-
-    // Sort by priority: high > medium > low, maintaining order within same priority
-    let updatedTodos = [...todos];
-    
-    // Find the correct position to insert based on priority
-    let insertIndex = 0;
-    
-    if (selectedPriority === "high") {
-      // High priority goes at the top
-      insertIndex = 0;
-    } else if (selectedPriority === "medium") {
-      // Medium goes after all high priority tasks
-      insertIndex = updatedTodos.findIndex(todo => todo.priority === "low");
-      if (insertIndex === -1) insertIndex = updatedTodos.length;
-    } else {
-      // Low priority goes at the bottom
-      insertIndex = updatedTodos.length;
+    try {
+      setSaving(true);
+      const newTodo = await createTodo(inputText.trim(), selectedPriority);
+      
+      // Insert in correct position based on priority
+      let updatedTodos = [...todos];
+      let insertIndex = 0;
+      
+      if (selectedPriority === "high") {
+        insertIndex = 0;
+      } else if (selectedPriority === "medium") {
+        insertIndex = updatedTodos.findIndex(todo => todo.priority === "low");
+        if (insertIndex === -1) insertIndex = updatedTodos.length;
+      } else {
+        insertIndex = updatedTodos.length;
+      }
+      
+      updatedTodos.splice(insertIndex, 0, newTodo);
+      setTodos(updatedTodos);
+      setInputText("");
+      setShowInput(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error('Failed to add todo:', error);
+      Alert.alert('Error', 'Failed to add task. Please try again.');
+    } finally {
+      setSaving(false);
     }
-    
-    updatedTodos.splice(insertIndex, 0, newTodo);
-    setTodos(updatedTodos);
-    setInputText("");
-    setShowInput(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const toggleTodo = (id: string) => {
+  const toggleTodo = async (id: string) => {
+    const todo = todos.find(t => t.id === id);
+    if (!todo) return;
+
+    // Optimistic update
     setTodos(
-      todos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
+      todos.map((t) =>
+        t.id === id ? { ...t, completed: !t.completed } : t
       )
     );
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      await toggleTodoService(id, !todo.completed);
+    } catch (error) {
+      // Revert on error
+      setTodos(
+        todos.map((t) =>
+          t.id === id ? { ...t, completed: todo.completed } : t
+        )
+      );
+      Alert.alert('Error', 'Failed to update task');
+    }
   };
 
-  const deleteTodo = (id: string) => {
+  const deleteTodo = async (id: string) => {
+    // Optimistic delete
+    const originalTodos = [...todos];
     setTodos(todos.filter((todo) => todo.id !== id));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      await deleteTodoService(id);
+    } catch (error) {
+      // Revert on error
+      setTodos(originalTodos);
+      Alert.alert('Error', 'Failed to delete task');
+    }
   };
 
   const canAddMore = todos.length < MAX_TODOS;
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#3949AB" />
+        <Text style={styles.loadingText}>Loading tasks...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -136,6 +198,7 @@ export default function TodoList() {
             onChangeText={setInputText}
             autoFocus
             maxLength={60}
+            editable={!saving}
           />
 
           {/* Priority Selector */}
@@ -157,6 +220,7 @@ export default function TodoList() {
                     setSelectedPriority(priority);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }}
+                  disabled={saving}
                 >
                   <Text
                     style={[
@@ -180,6 +244,7 @@ export default function TodoList() {
                 setInputText("");
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
+              disabled={saving}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
@@ -187,18 +252,22 @@ export default function TodoList() {
               style={[
                 styles.actionButton,
                 styles.saveButton,
-                !inputText.trim() && styles.saveButtonDisabled,
+                (!inputText.trim() || saving) && styles.saveButtonDisabled,
               ]}
               onPress={addTodo}
-              disabled={!inputText.trim()}
+              disabled={!inputText.trim() || saving}
             >
-              <Text style={styles.saveButtonText}>Add Task</Text>
+              {saving ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>Add Task</Text>
+              )}
             </Pressable>
           </View>
         </View>
       )}
 
-      {/* Todo List */}
+      {/* Todo List - ✅ FIXED: Disabled scrolling, parent ScrollView handles it */}
       {todos.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📝</Text>
@@ -254,7 +323,7 @@ export default function TodoList() {
                   ]}
                   numberOfLines={2}
                 >
-                  {item.text}
+                  {item.title}
                 </Text>
               </Pressable>
 
@@ -268,7 +337,8 @@ export default function TodoList() {
             </View>
           )}
           contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
+          scrollEnabled={false}
+          nestedScrollEnabled={false}
         />
       )}
 
@@ -296,6 +366,17 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
     minHeight: 200,
+  },
+
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#666",
   },
 
   header: {

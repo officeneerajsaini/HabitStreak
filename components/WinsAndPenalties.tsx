@@ -1,14 +1,190 @@
-import { StyleSheet, Text, View } from "react-native";
+import * as Haptics from "expo-haptics";
+import { useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
-const WINS = [
-  30, 50, 75, 100, 150, 200, 250, 300, 365,
+interface WinRow {
+  id: string;
+  streak: number;
+  reward: string;
+  date: string;
+  notes: string;
+}
+
+const DEFAULT_WINS = [
+  7, 14, 21, 30, 45, 60, 75, 100, 150, 200, 250, 300, 365,
 ];
 
 export default function WinsAndPenalties() {
+  // Initialize with default streaks
+  const [rows, setRows] = useState<WinRow[]>(
+    DEFAULT_WINS.map((days) => ({
+      id: `win-${days}`,
+      streak: days,
+      reward: "",
+      date: "",
+      notes: "",
+    }))
+  );
+
+  const [editingCell, setEditingCell] = useState<{
+    id: string;
+    field: keyof WinRow;
+  } | null>(null);
+
+  // Start editing a cell
+  const handleCellPress = (id: string, field: keyof WinRow) => {
+    if (field === "id") return; // Don't edit ID
+    
+    setEditingCell({ id, field });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Auto-save when value changes
+  const handleValueChange = (value: string) => {
+    if (!editingCell) return;
+
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === editingCell.id
+          ? { ...row, [editingCell.field]: value }
+          : row
+      )
+    );
+  };
+
+  // Finish editing
+  const handleFinishEdit = () => {
+    setEditingCell(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Add new row
+  const handleAddRow = () => {
+    Alert.prompt(
+      "Add New Streak Goal",
+      "Enter number of days:",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Add",
+          onPress: (days?: string) => {
+            const daysNum = parseInt(days || "0");
+            if (daysNum > 0) {
+              const newRow: WinRow = {
+                id: `win-${Date.now()}`,
+                streak: daysNum,
+                reward: "",
+                date: "",
+                notes: "",
+              };
+              setRows((prev) => [...prev, newRow].sort((a, b) => a.streak - b.streak));
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+          },
+        },
+      ],
+      "plain-text"
+    );
+  };
+
+  // Delete row
+  const handleDeleteRow = (id: string) => {
+    Alert.alert(
+      "Delete Row",
+      "Are you sure you want to delete this streak goal?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setRows((prev) => prev.filter((row) => row.id !== id));
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          },
+        },
+      ]
+    );
+  };
+
+  const renderCell = (row: WinRow, field: keyof WinRow) => {
+    const isEditing = editingCell?.id === row.id && editingCell?.field === field;
+    const value = row[field];
+    const isEmpty = !value || value === "";
+
+    // Streak column (number only, with emoji)
+    if (field === "streak") {
+      return (
+        <Pressable
+          onPress={() => handleCellPress(row.id, field)}
+          style={[styles.cell, styles.colStreak, styles.cellPressable]}
+        >
+          {isEditing ? (
+            <TextInput
+              value={String(value)}
+              onChangeText={handleValueChange}
+              onBlur={handleFinishEdit}
+              autoFocus
+              keyboardType="number-pad"
+              style={styles.input}
+              maxLength={4}
+            />
+          ) : (
+            <Text style={styles.cellText}>🔥 {value} Days</Text>
+          )}
+        </Pressable>
+      );
+    }
+
+    // Other editable columns
+    const columnStyle =
+      field === "reward"
+        ? styles.colReward
+        : field === "date"
+        ? styles.colDate
+        : styles.colNotes;
+
+    return (
+      <Pressable
+        onPress={() => handleCellPress(row.id, field)}
+        style={[styles.cell, columnStyle, styles.cellPressable, isEmpty && styles.emptyCell]}
+      >
+        {isEditing ? (
+          <TextInput
+            value={String(value)}
+            onChangeText={handleValueChange}
+            onBlur={handleFinishEdit}
+            autoFocus
+            style={styles.input}
+            placeholder={`Enter ${field}...`}
+            placeholderTextColor="#888"
+            maxLength={field === "notes" ? 100 : 50}
+          />
+        ) : (
+          <Text style={[styles.cellText, isEmpty && styles.emptyText]}>
+            {isEmpty ? "—" : String(value)}
+          </Text>
+        )}
+      </Pressable>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      {/* Title */}
-      <Text style={styles.title}>My Wins</Text>
+      {/* Title & Add Button */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>My Wins</Text>
+        <Pressable onPress={handleAddRow} style={styles.addButton}>
+          <Text style={styles.addButtonText}>+ Add</Text>
+        </Pressable>
+      </View>
 
       {/* Rule */}
       <View style={styles.ruleRow}>
@@ -18,25 +194,62 @@ export default function WinsAndPenalties() {
         </Text>
       </View>
 
-      {/* Table Header */}
-      <View style={[styles.row, styles.headerRow]}>
-        <Text style={[styles.cell, styles.colStreak]}>🔥 The Streak</Text>
-        <Text style={[styles.cell, styles.colReward]}>🎁 The Reward</Text>
-        <Text style={[styles.cell, styles.colDate]}>📅 Date</Text>
-        <Text style={[styles.cell, styles.colNotes]}>📝 Notes</Text>
-      </View>
+      {/* Hint */}
+      <Text style={styles.hint}>💡 Tap any cell to edit • Auto-saves as you type</Text>
 
-      {/* Table Rows */}
-      {WINS.map((days) => (
-        <View key={days} style={styles.row}>
-          <Text style={[styles.cell, styles.colStreak]}>
-            🔥 {days} Days
-          </Text>
-          <Text style={[styles.cell, styles.colReward]}>—</Text>
-          <Text style={[styles.cell, styles.colDate]}>—</Text>
-          <Text style={[styles.cell, styles.colNotes]}>—</Text>
+      {/* Table */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View>
+          {/* Table Header */}
+          <View style={[styles.row, styles.headerRow]}>
+            <Text style={[styles.cell, styles.colStreak, styles.headerText]}>
+              🔥 The Streak
+            </Text>
+            <Text style={[styles.cell, styles.colReward, styles.headerText]}>
+              🎁 The Reward
+            </Text>
+            <Text style={[styles.cell, styles.colDate, styles.headerText]}>
+              📅 Date
+            </Text>
+            <Text style={[styles.cell, styles.colNotes, styles.headerText]}>
+              📝 Notes
+            </Text>
+            <Text style={[styles.cell, styles.colActions, styles.headerText]}>
+              Actions
+            </Text>
+          </View>
+
+          {/* Table Rows */}
+          <ScrollView 
+            style={styles.tableScroll} 
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
+            {rows.map((row) => (
+              <View key={row.id} style={styles.row}>
+                {renderCell(row, "streak")}
+                {renderCell(row, "reward")}
+                {renderCell(row, "date")}
+                {renderCell(row, "notes")}
+
+                {/* Delete Button */}
+                <View style={[styles.cell, styles.colActions]}>
+                  <Pressable
+                    onPress={() => handleDeleteRow(row.id)}
+                    style={styles.deleteButton}
+                  >
+                    <Text style={styles.deleteButtonText}>🗑️</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
         </View>
-      ))}
+      </ScrollView>
     </View>
   );
 }
@@ -49,17 +262,36 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
 
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+
   title: {
     fontSize: 20,
     fontWeight: "700",
     color: "#FFFFFF",
-    marginBottom: 8,
+  },
+
+  addButton: {
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+
+  addButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
 
   ruleRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 14,
+    marginBottom: 10,
   },
 
   ruleLine: {
@@ -77,36 +309,99 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  hint: {
+    color: "#FFD700",
+    fontSize: 12,
+    marginBottom: 12,
+    fontStyle: "italic",
+  },
+
+  tableScroll: {
+    maxHeight: 400,
+  },
+
   row: {
     flexDirection: "row",
     borderTopWidth: 0.5,
     borderColor: "#555",
-    paddingVertical: 8,
+    paddingVertical: 10,
+    alignItems: "center",
   },
 
   headerRow: {
     borderTopWidth: 0,
-    paddingBottom: 6,
+    paddingBottom: 8,
+    backgroundColor: "#2A2A28",
   },
 
   cell: {
+    paddingHorizontal: 8,
+    justifyContent: "center",
+  },
+
+  cellPressable: {
+    minHeight: 40,
+  },
+
+  emptyCell: {
+    opacity: 0.5,
+  },
+
+  cellText: {
     color: "#FFFFFF",
     fontSize: 14,
   },
 
-  colStreak: {
-    width: 90,
+  emptyText: {
+    color: "#FFFFFF",
+    fontStyle: "italic",
+    opacity: 0.5,
   },
 
-  colReward: {
+  headerText: {
+    fontWeight: "700",
+    fontSize: 13,
+    color: "#FFD700",
+  },
+
+  colStreak: {
     width: 100,
   },
 
+  colReward: {
+    width: 120,
+  },
+
   colDate: {
-    width: 80,
+    width: 90,
   },
 
   colNotes: {
-    flex: 1,
+    width: 150,
+  },
+
+  colActions: {
+    width: 60,
+    alignItems: "center",
+  },
+
+  input: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    color: "#FFFFFF",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 4,
+    fontSize: 14,
+    minWidth: 80,
+    borderWidth: 1,
+    borderColor: "#4CAF50",
+  },
+
+  deleteButton: {
+    padding: 6,
+  },
+
+  deleteButtonText: {
+    fontSize: 18,
   },
 });

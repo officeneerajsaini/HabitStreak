@@ -234,7 +234,7 @@ export default function DailyTracker() {
                   {isToday && <Text style={styles.todayBadge}>Today</Text>}
                 </View>
 
-                {/* HABIT CELLS - ✅ Shows CHECKMARK only when done */}
+                {/* HABIT CELLS */}
                 {trackedHabits.map((habit) => {
                   const done = entry.completedHabitIds?.includes(habit.id) || false;
 
@@ -254,7 +254,6 @@ export default function DailyTracker() {
                       ]}
                     >
                       <Text style={styles.checkIcon}>
-                        {/* ✅ CHECKMARK ONLY for completed */}
                         {isFuture ? "—" : done ? "✅" : canEdit ? "⬜" : "❌"}
                       </Text>
                     </Pressable>
@@ -304,7 +303,7 @@ export default function DailyTracker() {
                   />
                 </View>
 
-                {/* 🎉 CELEBRATION */}
+                {/* CELEBRATION - Centered Popup */}
                 {celebratingDay === key && progress === 100 && (
                   <Animated.View
                     style={[
@@ -324,7 +323,7 @@ export default function DailyTracker() {
         </View>
       </ScrollView>
 
-      {/* ===== TOOLTIP MODAL - Shows habit name on hover/long-press ===== */}
+      {/* ===== TOOLTIP MODAL ===== */}
       <Modal
         visible={tooltipVisible}
         transparent
@@ -363,6 +362,7 @@ export default function DailyTracker() {
           <Text style={styles.addFormTitle}>🎯 Add Habit to Track</Text>
 
           <View style={styles.inputRow}>
+            {/* Habit Name Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Habit Name</Text>
               <TextInput
@@ -375,21 +375,29 @@ export default function DailyTracker() {
               />
             </View>
 
+            {/* Simple Emoji Input - User types/pastes emoji from keyboard */}
             <View style={styles.emojiInputGroup}>
               <Text style={styles.inputLabel}>Emoji</Text>
               <TextInput
                 value={newHabitEmoji}
-                onChangeText={setNewHabitEmoji}
-                placeholder="💧"
+                onChangeText={(text) => {
+                  // Only allow 1-2 characters (some emojis are 2 chars)
+                  if (text.length <= 2) {
+                    setNewHabitEmoji(text);
+                  }
+                }}
+                placeholder="📌"
                 placeholderTextColor="#999"
                 style={styles.emojiInput}
                 maxLength={2}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
           </View>
 
           <Text style={styles.inputHint}>
-            💡 Emoji shows in table header • Long-press to see habit name
+            💡 Tap emoji field → Use keyboard to add any emoji
           </Text>
 
           <Pressable
@@ -532,7 +540,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  /* ===== TABLE ===== */
   table: {
     borderWidth: 1,
     borderColor: "#E0E0E0",
@@ -558,7 +565,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF8E1",
   },
 
-  /* ===== CELLS ===== */
   cell: {
     justifyContent: "center",
     alignItems: "center",
@@ -619,7 +625,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
-  /* ===== TEXT ===== */
   dateText: {
     fontWeight: "600",
     fontSize: 13,
@@ -681,26 +686,31 @@ const styles = StyleSheet.create({
     color: "#999",
   },
 
-  /* ===== CELEBRATION ===== */
   celebrateBadge: {
     position: "absolute",
-    right: -5,
-    top: -8,
+    left: "50%",
+    top: "50%",
+    transform: [{ translateX: -60 }, { translateY: -15 }],
     backgroundColor: "#4CAF50",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
-    elevation: 6,
-    zIndex: 20,
+    elevation: 10,
+    zIndex: 999,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 2,
+    borderColor: "#FFF",
   },
 
   celebrateText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     color: "#FFF",
   },
 
-  /* ===== TOOLTIP ===== */
   tooltipOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.2)",
@@ -743,7 +753,6 @@ const styles = StyleSheet.create({
     borderTopColor: "#333",
   },
 
-  /* ===== ADD FORM ===== */
   toggleAddBtn: {
     backgroundColor: "#E8F5E9",
     paddingVertical: 12,
@@ -817,7 +826,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 12,
-    fontSize: 20,
+    fontSize: 24,
     textAlign: "center",
   },
 
@@ -846,7 +855,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 
-  /* ===== DELETE SECTION ===== */
   deleteSection: {
     marginTop: 16,
     paddingTop: 16,
@@ -949,7 +957,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  /* ===== LEGEND ===== */
   legend: {
     flexDirection: "row",
     justifyContent: "center",

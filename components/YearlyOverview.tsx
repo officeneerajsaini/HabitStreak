@@ -32,15 +32,13 @@ const MONTHS = [
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
-// Responsive card sizing - 2 cards per row with gap
 const CARDS_PER_ROW = 2;
 const CARD_PADDING = 12;
-const COLUMN_GAP = 12; // Gap between columns
+const COLUMN_GAP = 12;
 const TOTAL_HORIZONTAL_SPACING = (CARD_PADDING * 2) + COLUMN_GAP;
-const CARD_WIDTH = (SCREEN_WIDTH - TOTAL_HORIZONTAL_SPACING) / CARDS_PER_ROW - 12; // Reduced width
-const CARD_HEIGHT = CARD_WIDTH * 0.95; // Smaller cards
+const CARD_WIDTH = (SCREEN_WIDTH - TOTAL_HORIZONTAL_SPACING) / CARDS_PER_ROW - 12;
+const CARD_HEIGHT = CARD_WIDTH * 0.95;
 
-// Table cell widths - responsive
 const isSmallScreen = SCREEN_WIDTH < 400;
 const CELL_WIDTH = isSmallScreen ? 40 : 45;
 const DATE_CELL_WIDTH = isSmallScreen ? 55 : 60;
@@ -65,7 +63,6 @@ export default function YearlyOverview() {
   
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
-  // Calculate monthly progress for the entire year
   const monthlyProgress = useMemo(() => {
     const progress: Record<string, number> = {};
     const allMonths = MONTHS.flat();
@@ -106,7 +103,7 @@ export default function YearlyOverview() {
     return progress;
   }, [trackedHabits, today, currentYear]);
 
-  // Calculate streak data for selected month
+  // ✅ FIXED: Current Streak - checks backwards from today
   const getMonthStreakData = (monthIndex: number) => {
     const monthDate = new Date(currentYear, monthIndex, 1);
     const monthStart = startOfMonth(monthDate);
@@ -117,12 +114,12 @@ export default function YearlyOverview() {
       end: monthEnd 
     });
 
-    let currentStreak = 0;
     let longestStreak = 0;
     let tempStreak = 0;
     let perfectDays = 0;
     let totalDays = 0;
 
+    // Calculate longest streak and perfect days
     monthDays.forEach((day) => {
       if (!isAfter(day, today)) {
         totalDays++;
@@ -139,13 +136,28 @@ export default function YearlyOverview() {
       }
     });
 
-    // Check if still on streak
-    if (monthDays.length > 0) {
-      const lastDay = monthDays[monthDays.length - 1];
-      if (!isAfter(lastDay, today)) {
-        const lastDayKey = format(lastDay, "yyyy-MM-dd");
-        if (getProgress(lastDayKey) === 100) {
-          currentStreak = tempStreak;
+    // ✅ Calculate current streak by checking backwards from today
+    let currentStreak = 0;
+    
+    // Only count if today is in the selected month
+    const isTodayInMonth = today >= monthStart && today <= monthEnd;
+    
+    if (isTodayInMonth && trackedHabits.length > 0) {
+      // Start from today and check backwards
+      let checkDate = startOfDay(new Date(today));
+      
+      while (checkDate >= monthStart) {
+        const dateKey = format(checkDate, "yyyy-MM-dd");
+        const dayProgress = getProgress(dateKey);
+        
+        // Debug: Uncomment to see what's happening
+        // console.log(`Checking ${dateKey}: ${dayProgress}%`);
+        
+        if (dayProgress === 100) {
+          currentStreak++;
+          checkDate = subDays(checkDate, 1);
+        } else {
+          break; // Streak broken
         }
       }
     }
@@ -233,139 +245,141 @@ export default function YearlyOverview() {
           </View>
         ) : (
           <>
-            {/* Monthly Tracking Table */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={true}
-              style={styles.tableScroll}
-            >
-              <View style={styles.table}>
-                {/* HEADER ROW */}
-                <View style={styles.tableRow}>
-                  <View style={[styles.cell, styles.headerCell, { width: DATE_CELL_WIDTH }]}>
-                    <Text style={styles.headerText}>Day</Text>
-                  </View>
-
-                  {trackedHabits.map((habit) => (
-                    <View
-                      key={habit.id}
-                      style={[styles.cell, styles.headerCell, { width: CELL_WIDTH }]}
-                    >
-                      <Text style={styles.habitEmoji}>{habit.emoji}</Text>
+            {/* ✅ CENTERED TABLE */}
+            <View style={styles.tableWrapper}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={styles.tableScrollContent}
+              >
+                <View style={styles.table}>
+                  {/* HEADER ROW */}
+                  <View style={styles.tableRow}>
+                    <View style={[styles.cell, styles.headerCell, { width: DATE_CELL_WIDTH }]}>
+                      <Text style={styles.headerText}>Day</Text>
                     </View>
-                  ))}
 
-                  <View style={[styles.cell, styles.headerCell, { width: PERCENT_CELL_WIDTH }]}>
-                    <Text style={styles.headerText}>%</Text>
-                  </View>
-
-                  <View style={[styles.cell, styles.headerCell, { width: EMOJI_CELL_WIDTH }]}>
-                    <Text style={styles.headerText}>😊</Text>
-                  </View>
-
-                  <View style={[styles.cell, styles.headerCell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
-                    <Text style={styles.headerText}>Notes</Text>
-                  </View>
-                </View>
-
-                {/* DATA ROWS */}
-                <ScrollView
-                  style={styles.dataScroll}
-                  showsVerticalScrollIndicator={true}
-                  nestedScrollEnabled={true}
-                >
-                  {monthDays.map((day, rowIndex) => {
-                    const key = format(day, "yyyy-MM-dd");
-                    const isTodayRow = isSameDay(day, today);
-                    const isYesterdayRow = isSameDay(day, yesterday);
-                    const isFuture = isAfter(day, today);
-                    const canEdit = isEditable(day);
-                    const progress = getProgress(key);
-                    const isEvenRow = rowIndex % 2 === 0;
-                    const entry = getDayEntry(key);
-
-                    return (
+                    {trackedHabits.map((habit) => (
                       <View
-                        key={key}
-                        style={[
-                          styles.tableRow,
-                          isEvenRow && styles.evenRow,
-                          isTodayRow && styles.todayRow,
-                          isYesterdayRow && styles.yesterdayRow,
-                        ]}
+                        key={habit.id}
+                        style={[styles.cell, styles.headerCell, { width: CELL_WIDTH }]}
                       >
-                        <View style={[styles.cell, { width: DATE_CELL_WIDTH }]}>
-                          <Text style={[styles.dateText, isTodayRow && styles.todayText]}>
-                            {format(day, "EEE")}
-                          </Text>
-                          <Text style={[styles.dateNumber, isTodayRow && styles.todayText]}>
-                            {format(day, "dd")}
-                          </Text>
-                          {isTodayRow && (
-                            <View style={styles.todayBadge}>
-                              <Text style={styles.todayBadgeText}>TODAY</Text>
-                            </View>
-                          )}
-                        </View>
+                        <Text style={styles.habitEmoji}>{habit.emoji}</Text>
+                      </View>
+                    ))}
 
-                        {trackedHabits.map((habit) => {
-                          const done = entry.completedHabitIds?.includes(habit.id) || false;
+                    <View style={[styles.cell, styles.headerCell, { width: PERCENT_CELL_WIDTH }]}>
+                      <Text style={styles.headerText}>%</Text>
+                    </View>
 
-                          return (
-                            <Pressable
-                              key={habit.id}
-                              disabled={!canEdit}
-                              onPress={() => handleToggle(key, habit.id)}
+                    <View style={[styles.cell, styles.headerCell, { width: EMOJI_CELL_WIDTH }]}>
+                      <Text style={styles.headerText}>😊</Text>
+                    </View>
+
+                    <View style={[styles.cell, styles.headerCell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
+                      <Text style={styles.headerText}>Notes</Text>
+                    </View>
+                  </View>
+
+                  {/* DATA ROWS */}
+                  <ScrollView
+                    style={styles.dataScroll}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                  >
+                    {monthDays.map((day, rowIndex) => {
+                      const key = format(day, "yyyy-MM-dd");
+                      const isTodayRow = isSameDay(day, today);
+                      const isYesterdayRow = isSameDay(day, yesterday);
+                      const isFuture = isAfter(day, today);
+                      const canEdit = isEditable(day);
+                      const progress = getProgress(key);
+                      const isEvenRow = rowIndex % 2 === 0;
+                      const entry = getDayEntry(key);
+
+                      return (
+                        <View
+                          key={key}
+                          style={[
+                            styles.tableRow,
+                            isEvenRow && styles.evenRow,
+                            isTodayRow && styles.todayRow,
+                            isYesterdayRow && styles.yesterdayRow,
+                          ]}
+                        >
+                          <View style={[styles.cell, { width: DATE_CELL_WIDTH }]}>
+                            <Text style={[styles.dateText, isTodayRow && styles.todayText]}>
+                              {format(day, "EEE")}
+                            </Text>
+                            <Text style={[styles.dateNumber, isTodayRow && styles.todayText]}>
+                              {format(day, "dd")}
+                            </Text>
+                            {isTodayRow && (
+                              <View style={styles.todayBadge}>
+                                <Text style={styles.todayBadgeText}>TODAY</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {trackedHabits.map((habit) => {
+                            const done = entry.completedHabitIds?.includes(habit.id) || false;
+
+                            return (
+                              <Pressable
+                                key={habit.id}
+                                disabled={!canEdit}
+                                onPress={() => handleToggle(key, habit.id)}
+                                style={[
+                                  styles.cell,
+                                  { width: CELL_WIDTH },
+                                  done && styles.completedCell,
+                                  !canEdit && styles.disabledCell,
+                                ]}
+                              >
+                                <Text style={styles.checkIcon}>
+                                  {isFuture ? "—" : done ? "✅" : canEdit ? "⬜" : "❌"}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+
+                          <View style={[styles.cell, { width: PERCENT_CELL_WIDTH }]}>
+                            <Text
                               style={[
-                                styles.cell,
-                                { width: CELL_WIDTH },
-                                done && styles.completedCell,
-                                !canEdit && styles.disabledCell,
+                                styles.percentText,
+                                progress === 100 && styles.fullProgress,
+                                progress >= 70 && progress < 100 && styles.highProgress,
+                                progress > 0 && progress < 50 && styles.lowProgress,
                               ]}
                             >
-                              <Text style={styles.checkIcon}>
-                                {isFuture ? "—" : done ? "✅" : canEdit ? "⬜" : "❌"}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
+                              {isFuture ? "—" : `${progress}%`}
+                            </Text>
+                          </View>
 
-                        <View style={[styles.cell, { width: PERCENT_CELL_WIDTH }]}>
-                          <Text
-                            style={[
-                              styles.percentText,
-                              progress === 100 && styles.fullProgress,
-                              progress >= 70 && progress < 100 && styles.highProgress,
-                              progress > 0 && progress < 50 && styles.lowProgress,
-                            ]}
-                          >
-                            {isFuture ? "—" : `${progress}%`}
-                          </Text>
-                        </View>
+                          <View style={[styles.cell, { width: EMOJI_CELL_WIDTH }]}>
+                            <Text style={styles.emojiText}>
+                              {isFuture ? "—" : getDayEmoji(progress)}
+                            </Text>
+                          </View>
 
-                        <View style={[styles.cell, { width: EMOJI_CELL_WIDTH }]}>
-                          <Text style={styles.emojiText}>
-                            {isFuture ? "—" : getDayEmoji(progress)}
-                          </Text>
+                          <View style={[styles.cell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
+                            <TextInput
+                              value={entry.note || ""}
+                              editable={canEdit}
+                              placeholder={canEdit ? "Note..." : "—"}
+                              placeholderTextColor="#999"
+                              onChangeText={(text) => updateNote(key, text)}
+                              style={[styles.notesInput, !canEdit && styles.disabledInput]}
+                              maxLength={30}
+                            />
+                          </View>
                         </View>
-
-                        <View style={[styles.cell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
-                          <TextInput
-                            value={entry.note || ""}
-                            editable={canEdit}
-                            placeholder={canEdit ? "Note..." : "—"}
-                            placeholderTextColor="#999"
-                            onChangeText={(text) => updateNote(key, text)}
-                            style={[styles.notesInput, !canEdit && styles.disabledInput]}
-                            maxLength={30}
-                          />
-                        </View>
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            </ScrollView>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </ScrollView>
+            </View>
 
             {/* Streak Statistics Below Table */}
             <View style={styles.streakSection}>
@@ -381,7 +395,7 @@ export default function YearlyOverview() {
                     Current Streak
                   </Text>
                   <Text style={[styles.streakSubtext, styles.currentStreakSubtext]}>
-                    consecutive days
+                    {streakData.currentStreak > 0 ? "days in a row!" : "from today back"}
                   </Text>
                 </View>
 
@@ -545,7 +559,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 10,
+    fontSize: 20,
     fontWeight: "800",
     color: "#1a1a2e",
   },
@@ -703,9 +717,14 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
-  /* ===== TABLE STYLES ===== */
-  tableScroll: {
+  // ✅ CENTERED TABLE
+  tableWrapper: {
+    alignItems: "center",
     marginBottom: 16,
+  },
+
+  tableScrollContent: {
+    alignItems: "center",
   },
 
   table: {
@@ -844,7 +863,6 @@ const styles = StyleSheet.create({
     color: "#999",
   },
 
-  /* ===== STREAK SECTION ===== */
   streakSection: {
     marginTop: 12,
     paddingTop: 12,
@@ -897,7 +915,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Current Streak - Light Orange Fire
   currentStreakCard: {
     backgroundColor: "#FFF3E0",
     borderColor: "#FFB74D",
@@ -912,7 +929,6 @@ const styles = StyleSheet.create({
     color: "#F57C00",
   },
 
-  // Longest Streak - Dark Fire
   longestStreakCard: {
     backgroundColor: "#FFEBEE",
     borderColor: "#FF8A80",
@@ -927,7 +943,6 @@ const styles = StyleSheet.create({
     color: "#D84315",
   },
 
-  // Perfect Days - Green
   perfectDaysCard: {
     backgroundColor: "#E8F5E9",
     borderColor: "#81C784",
@@ -942,7 +957,6 @@ const styles = StyleSheet.create({
     color: "#388E3C",
   },
 
-  // Avg Progress - Mixed Fire (Orange & Yellow)
   avgProgressCard: {
     backgroundColor: "#FFF9C4",
     borderColor: "#FFD54F",

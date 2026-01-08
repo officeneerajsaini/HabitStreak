@@ -25,8 +25,6 @@ import {
   View,
 } from "react-native";
 
-/* ================= COMPONENT ================= */
-
 export default function MonthlyOverview() {
   const { width } = useWindowDimensions();
   const isMobile = width < 500;
@@ -53,7 +51,6 @@ export default function MonthlyOverview() {
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // Tooltip
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [tooltipText, setTooltipText] = useState("");
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -231,7 +228,7 @@ export default function MonthlyOverview() {
         </View>
       </View>
 
-      {/* TABLE */}
+      {/* TABLE - CENTERED */}
       {trackedHabits.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📝</Text>
@@ -241,158 +238,160 @@ export default function MonthlyOverview() {
           </Text>
         </View>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={true}
-          style={styles.tableScroll}
-        >
-          <View style={styles.table}>
-            {/* HEADER ROW */}
-            <View style={styles.tableRow}>
-              <View style={[styles.cell, styles.headerCell, { width: DATE_CELL_WIDTH }]}>
-                <Text style={styles.headerText}>Day</Text>
-              </View>
+        <View style={styles.tableWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={true}
+            contentContainerStyle={styles.tableScrollContent}
+          >
+            <View style={styles.table}>
+              {/* HEADER ROW */}
+              <View style={styles.tableRow}>
+                <View style={[styles.cell, styles.headerCell, { width: DATE_CELL_WIDTH }]}>
+                  <Text style={styles.headerText}>Day</Text>
+                </View>
 
-              {trackedHabits.map((habit) => (
-                <Pressable
-                  key={habit.id}
-                  style={[styles.cell, styles.headerCell, { width: CELL_WIDTH }]}
-                  onLongPress={(e) => showTooltip(habit.title, e)}
-                  onPressOut={hideTooltip}
-                  delayLongPress={200}
-                >
-                  <Text style={styles.habitEmoji}>{habit.emoji}</Text>
-                </Pressable>
-              ))}
-
-              <View style={[styles.cell, styles.headerCell, { width: PERCENT_CELL_WIDTH }]}>
-                <Text style={styles.headerText}>%</Text>
-              </View>
-
-              <View style={[styles.cell, styles.headerCell, { width: EMOJI_CELL_WIDTH }]}>
-                <Text style={styles.headerText}>😊</Text>
-              </View>
-
-              <View style={[styles.cell, styles.headerCell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
-                <Text style={styles.headerText}>Notes</Text>
-              </View>
-            </View>
-
-            {/* DATA ROWS */}
-            <ScrollView
-              style={styles.dataScroll}
-              showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
-            >
-              {monthDays.map((day, rowIndex) => {
-                const key = format(day, "yyyy-MM-dd");
-                const isTodayRow = isSameDay(day, today);
-                const isYesterdayRow = isSameDay(day, yesterday);
-                const isFuture = isAfter(day, today);
-                const canEdit = isEditable(day);
-                const progress = getProgress(key);
-                const isEvenRow = rowIndex % 2 === 0;
-                const entry = getDayEntry(key);
-
-                return (
-                  <View
-                    key={key}
-                    style={[
-                      styles.tableRow,
-                      isEvenRow && styles.evenRow,
-                      isTodayRow && styles.todayRow,
-                      isYesterdayRow && styles.yesterdayRow,
-                    ]}
+                {trackedHabits.map((habit) => (
+                  <Pressable
+                    key={habit.id}
+                    style={[styles.cell, styles.headerCell, { width: CELL_WIDTH }]}
+                    onLongPress={(e) => showTooltip(habit.title, e)}
+                    onPressOut={hideTooltip}
+                    delayLongPress={200}
                   >
-                    <View style={[styles.cell, { width: DATE_CELL_WIDTH }]}>
-                      <Text style={[styles.dateText, isTodayRow && styles.todayText]}>
-                        {format(day, "EEE")}
-                      </Text>
-                      <Text style={[styles.dateNumber, isTodayRow && styles.todayText]}>
-                        {format(day, "dd")}
-                      </Text>
-                      {isTodayRow && (
-                        <View style={styles.todayBadge}>
-                          <Text style={styles.todayBadgeText}>TODAY</Text>
-                        </View>
-                      )}
-                    </View>
+                    <Text style={styles.habitEmoji}>{habit.emoji}</Text>
+                  </Pressable>
+                ))}
 
-                    {trackedHabits.map((habit) => {
-                      const done = entry.completedHabitIds?.includes(habit.id) || false;
+                <View style={[styles.cell, styles.headerCell, { width: PERCENT_CELL_WIDTH }]}>
+                  <Text style={styles.headerText}>%</Text>
+                </View>
 
-                      return (
-                        <Pressable
-                          key={habit.id}
-                          disabled={!canEdit}
-                          onPress={() => handleToggle(key, habit.id)}
-                          onLongPress={(e) => showTooltip(habit.title, e)}
-                          onPressOut={hideTooltip}
-                          delayLongPress={300}
+                <View style={[styles.cell, styles.headerCell, { width: EMOJI_CELL_WIDTH }]}>
+                  <Text style={styles.headerText}>😊</Text>
+                </View>
+
+                <View style={[styles.cell, styles.headerCell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
+                  <Text style={styles.headerText}>Notes</Text>
+                </View>
+              </View>
+
+              {/* DATA ROWS */}
+              <ScrollView
+                style={styles.dataScroll}
+                showsVerticalScrollIndicator={true}
+                nestedScrollEnabled={true}
+              >
+                {monthDays.map((day, rowIndex) => {
+                  const key = format(day, "yyyy-MM-dd");
+                  const isTodayRow = isSameDay(day, today);
+                  const isYesterdayRow = isSameDay(day, yesterday);
+                  const isFuture = isAfter(day, today);
+                  const canEdit = isEditable(day);
+                  const progress = getProgress(key);
+                  const isEvenRow = rowIndex % 2 === 0;
+                  const entry = getDayEntry(key);
+
+                  return (
+                    <View
+                      key={key}
+                      style={[
+                        styles.tableRow,
+                        isEvenRow && styles.evenRow,
+                        isTodayRow && styles.todayRow,
+                        isYesterdayRow && styles.yesterdayRow,
+                      ]}
+                    >
+                      <View style={[styles.cell, { width: DATE_CELL_WIDTH }]}>
+                        <Text style={[styles.dateText, isTodayRow && styles.todayText]}>
+                          {format(day, "EEE")}
+                        </Text>
+                        <Text style={[styles.dateNumber, isTodayRow && styles.todayText]}>
+                          {format(day, "dd")}
+                        </Text>
+                        {isTodayRow && (
+                          <View style={styles.todayBadge}>
+                            <Text style={styles.todayBadgeText}>TODAY</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {trackedHabits.map((habit) => {
+                        const done = entry.completedHabitIds?.includes(habit.id) || false;
+
+                        return (
+                          <Pressable
+                            key={habit.id}
+                            disabled={!canEdit}
+                            onPress={() => handleToggle(key, habit.id)}
+                            onLongPress={(e) => showTooltip(habit.title, e)}
+                            onPressOut={hideTooltip}
+                            delayLongPress={300}
+                            style={[
+                              styles.cell,
+                              { width: CELL_WIDTH },
+                              done && styles.completedCell,
+                              !canEdit && styles.disabledCell,
+                            ]}
+                          >
+                            <Text style={styles.checkIcon}>
+                              {isFuture ? "—" : done ? "✅" : canEdit ? "⬜" : "❌"}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+
+                      <View style={[styles.cell, { width: PERCENT_CELL_WIDTH }]}>
+                        <Text
                           style={[
-                            styles.cell,
-                            { width: CELL_WIDTH },
-                            done && styles.completedCell,
-                            !canEdit && styles.disabledCell,
+                            styles.percentText,
+                            progress === 100 && styles.fullProgress,
+                            progress >= 70 && progress < 100 && styles.highProgress,
+                            progress > 0 && progress < 50 && styles.lowProgress,
                           ]}
                         >
-                          <Text style={styles.checkIcon}>
-                            {isFuture ? "—" : done ? "✅" : canEdit ? "⬜" : "❌"}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                          {isFuture ? "—" : `${progress}%`}
+                        </Text>
+                      </View>
 
-                    <View style={[styles.cell, { width: PERCENT_CELL_WIDTH }]}>
-                      <Text
-                        style={[
-                          styles.percentText,
-                          progress === 100 && styles.fullProgress,
-                          progress >= 70 && progress < 100 && styles.highProgress,
-                          progress > 0 && progress < 50 && styles.lowProgress,
-                        ]}
-                      >
-                        {isFuture ? "—" : `${progress}%`}
-                      </Text>
+                      <View style={[styles.cell, { width: EMOJI_CELL_WIDTH }]}>
+                        <Text style={styles.emojiText}>
+                          {isFuture ? "—" : getDayEmoji(progress)}
+                        </Text>
+                      </View>
+
+                      <View style={[styles.cell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
+                        <TextInput
+                          value={entry.note || ""}
+                          editable={canEdit}
+                          placeholder={canEdit ? "Note..." : "—"}
+                          placeholderTextColor="#999"
+                          onChangeText={(text) => updateNote(key, text)}
+                          style={[styles.notesInput, !canEdit && styles.disabledInput]}
+                          maxLength={30}
+                        />
+                      </View>
+
+                      {celebratingDay === key && progress === 100 && (
+                        <Animated.View
+                          style={[
+                            styles.celebrateBadge,
+                            {
+                              opacity: celebrationAnim,
+                              transform: [{ scale: celebrationAnim }],
+                            },
+                          ]}
+                        >
+                          <Text style={styles.celebrateText}>🎉 Perfect! 🎊</Text>
+                        </Animated.View>
+                      )}
                     </View>
-
-                    <View style={[styles.cell, { width: EMOJI_CELL_WIDTH }]}>
-                      <Text style={styles.emojiText}>
-                        {isFuture ? "—" : getDayEmoji(progress)}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.cell, styles.lastCell, { width: NOTES_CELL_WIDTH }]}>
-                      <TextInput
-                        value={entry.note || ""}
-                        editable={canEdit}
-                        placeholder={canEdit ? "Note..." : "—"}
-                        placeholderTextColor="#999"
-                        onChangeText={(text) => updateNote(key, text)}
-                        style={[styles.notesInput, !canEdit && styles.disabledInput]}
-                        maxLength={30}
-                      />
-                    </View>
-
-                    {celebratingDay === key && progress === 100 && (
-                      <Animated.View
-                        style={[
-                          styles.celebrateBadge,
-                          {
-                            opacity: celebrationAnim,
-                            transform: [{ scale: celebrationAnim }],
-                          },
-                        ]}
-                      >
-                        <Text style={styles.celebrateText}>🎉 Perfect! 🎊</Text>
-                      </Animated.View>
-                    )}
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </ScrollView>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </ScrollView>
+        </View>
       )}
 
       {/* TOOLTIP */}
@@ -436,8 +435,6 @@ export default function MonthlyOverview() {
     </View>
   );
 }
-
-/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
   container: {
@@ -589,13 +586,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
-  /* ===== TABLE ===== */
-  tableScroll: {
+  // ✅ FIX: Center the table
+  tableWrapper: {
+    alignItems: "center",
     marginBottom: 10,
   },
 
   tableScrollContent: {
-    paddingBottom: 4,
+    alignItems: "center",
   },
 
   table: {
@@ -607,10 +605,6 @@ const styles = StyleSheet.create({
 
   dataScroll: {
     maxHeight: 320,
-  },
-
-  dataScrollMobile: {
-    maxHeight: 280,
   },
 
   tableRow: {
@@ -631,7 +625,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF8E1",
   },
 
-  /* ===== CELLS ===== */
   cell: {
     justifyContent: "center",
     alignItems: "center",
@@ -657,17 +650,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  headerTextMobile: {
-    fontSize: 9,
-  },
-
-  habitColorDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginBottom: 2,
-  },
-
   habitEmoji: {
     fontSize: 16,
   },
@@ -680,25 +662,16 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
-  /* ===== TEXT STYLES ===== */
   dateText: {
     fontWeight: "500",
     fontSize: 9,
     color: "#666",
   },
 
-  dateTextMobile: {
-    fontSize: 8,
-  },
-
   dateNumber: {
     fontWeight: "700",
     fontSize: 12,
     color: "#333",
-  },
-
-  dateNumberMobile: {
-    fontSize: 11,
   },
 
   todayText: {
@@ -713,36 +686,20 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  todayBadgeMobile: {
-    paddingHorizontal: 3,
-  },
-
   todayBadgeText: {
     color: "#FFF",
     fontSize: 7,
     fontWeight: "700",
   },
 
-  todayBadgeTextMobile: {
-    fontSize: 6,
-  },
-
   checkIcon: {
     fontSize: 14,
-  },
-
-  checkIconMobile: {
-    fontSize: 12,
   },
 
   percentText: {
     fontWeight: "700",
     fontSize: 11,
     color: "#666",
-  },
-
-  percentTextMobile: {
-    fontSize: 9,
   },
 
   fullProgress: {
@@ -761,10 +718,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  emojiTextMobile: {
-    fontSize: 12,
-  },
-
   notesInput: {
     flex: 1,
     fontSize: 9,
@@ -775,45 +728,34 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  notesInputMobile: {
-    fontSize: 8,
-  },
-
   disabledInput: {
     color: "#999",
   },
 
-  /* ===== CELEBRATION ===== */
   celebrateBadge: {
     position: "absolute",
-    right: 4,
-    top: -4,
+    left: "50%",
+    top: "50%",
     backgroundColor: "#4CAF50",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 10,
-    elevation: 6,
-    zIndex: 20,
-  },
-
-  celebrateBadgeMobile: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    right: 2,
-    top: -3,
+    elevation: 10,
+    zIndex: 999,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 2,
+    borderColor: "#FFF",
   },
 
   celebrateText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
     color: "#FFF",
   },
 
-  celebrateTextMobile: {
-    fontSize: 8,
-  },
-
-  /* ===== TOOLTIP ===== */
   tooltipOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.3)",
@@ -842,7 +784,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  /* ===== LEGEND ===== */
   legend: {
     flexDirection: "row",
     justifyContent: "center",
@@ -851,11 +792,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: "#EEE",
-  },
-
-  legendMobile: {
-    gap: 10,
-    paddingTop: 6,
   },
 
   legendItem: {
@@ -868,16 +804,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  legendIconMobile: {
-    fontSize: 10,
-  },
-
   legendText: {
     fontSize: 10,
     color: "#666",
-  },
-
-  legendTextMobile: {
-    fontSize: 9,
   },
 });
