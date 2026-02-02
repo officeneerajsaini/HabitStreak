@@ -368,7 +368,10 @@ export default function MonthlyOverview() {
                           placeholderTextColor="#999"
                           onChangeText={(text) => updateNote(key, text)}
                           style={[styles.notesInput, !canEdit && styles.disabledInput]}
-                          maxLength={30}
+                          multiline
+                          numberOfLines={2}
+                          maxLength={200}
+                          textAlignVertical="top"
                         />
                       </View>
 
@@ -723,9 +726,10 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: "#333",
     paddingHorizontal: 2,
-    paddingVertical: 1,
+    paddingVertical: 2,
     width: "100%",
-    textAlign: "center",
+    minHeight: 30,
+    maxHeight: 50,
   },
 
   disabledInput: {

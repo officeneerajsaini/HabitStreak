@@ -1,5 +1,6 @@
 import { HabitListProvider } from '@/context/HabitListContext';
 import { TrackerProvider } from '@/context/TrackerContext';
+import { RoutineProvider } from '@/context/RoutineContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -7,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import NotificationHandler from '@/components/NotificationHandler';
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
@@ -39,13 +41,16 @@ function RootLayoutNav() {
   return (
     <HabitListProvider>
       <TrackerProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
+        <RoutineProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+            <StatusBar style="auto" />
+            <NotificationHandler />
+          </ThemeProvider>
+        </RoutineProvider>
       </TrackerProvider>
     </HabitListProvider>
   );

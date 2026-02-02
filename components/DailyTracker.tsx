@@ -299,7 +299,10 @@ export default function DailyTracker() {
                       styles.notesInput,
                       !canEdit && styles.disabledInput,
                     ]}
-                    maxLength={50}
+                    multiline
+                    numberOfLines={3}
+                    maxLength={500}
+                    textAlignVertical="top"
                   />
                 </View>
 

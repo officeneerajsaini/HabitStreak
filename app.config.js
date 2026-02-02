@@ -10,8 +10,13 @@ export default {
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
+      bundleIdentifier: "com.neeraj.habittracker"
     },
     android: {
+      package: "com.officeneerajsaini.habitstreak",
+      minSdkVersion: 23,  // Android 6.0+ (covers ~98% of devices)
+      compileSdkVersion: 34,
+      targetSdkVersion: 34,
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
         foregroundImage: "./assets/images/icon.png",
@@ -20,7 +25,7 @@ export default {
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
-    },
+    },    
     web: {
       output: "static",
       favicon: "./assets/images/icon.png",
@@ -46,8 +51,11 @@ export default {
     },
     // 🔥 NEW: Add environment variables here
     extra: {
-      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
-      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      supabaseUrl: "https://upmstbqemylztyiezdrx.supabase.co",
+      supabaseAnonKey:"sb_publishable_hUMzeI0_IMzkGJGdDC30hA_EHG3d-7R",
+      eas: {
+        projectId: "89543181-4920-4e18-91cb-091b1d693882",
+      },
     }
   },
 };

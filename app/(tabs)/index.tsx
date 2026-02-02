@@ -3,6 +3,7 @@ import GithubStyleHeatmap from "@/components/GithubStyleHeatmap";
 import GoalsManager from "@/components/GoalsManager";
 import HabitListCard from "@/components/HabitListCard";
 import MonthlyOverview from "@/components/MonthlyOverview";
+import RoutineManager from "@/components/RoutineManager";
 import TodoList from "@/components/ToDoList";
 import WinsAndPenalties from "@/components/WinsAndPenalties";
 import YearlyOverview from "@/components/YearlyOverview";
@@ -25,6 +26,11 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📊 Activity</Text>
           <GithubStyleHeatmap />
+        </View>
+
+        {/* ⏰ Daily Routines */}
+        <View style={styles.section}>
+          <RoutineManager />
         </View>
 
         <View style={styles.section}>
